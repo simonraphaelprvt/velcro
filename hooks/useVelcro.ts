@@ -11,7 +11,8 @@ interface UseVelcroReturn {
   status: VelcroStatus;
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
-  isActive: boolean;
+  // Exposed so VelcroOrb can connect Web Audio API for visualization
+  audioElement: HTMLAudioElement | null;
 }
 
 function makeId() {
@@ -21,7 +22,7 @@ function makeId() {
 export function useVelcro(): UseVelcroReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<VelcroStatus>("idle");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const recorder = useRecorder();
 
   const addMessage = useCallback((role: Message["role"], content: string): string => {
@@ -47,14 +48,9 @@ export function useVelcro(): UseVelcroReturn {
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-
       const audio = new Audio(url);
-      audioRef.current = audio;
+
+      setAudioElement(audio);
 
       await new Promise<void>((resolve) => {
         audio.onended = () => resolve();
@@ -63,6 +59,7 @@ export function useVelcro(): UseVelcroReturn {
       });
 
       URL.revokeObjectURL(url);
+      setAudioElement(null);
     } catch (err) {
       console.error("TTS error:", err);
     } finally {
@@ -93,7 +90,7 @@ export function useVelcro(): UseVelcroReturn {
         return;
       }
 
-      addMessage("user", query);
+      const userMessageId = addMessage("user", query);
 
       // 2. Stream Claude response
       setStatus("thinking");
@@ -105,15 +102,15 @@ export function useVelcro(): UseVelcroReturn {
 
       let fullResponse = "";
       try {
-        // Build history (exclude the empty assistant placeholder we just added)
+        // Build history snapshot before this exchange
         const history = messages
-          .concat({ id: makeId(), role: "user", content: query, timestamp: new Date() })
+          .filter((m) => m.content) // exclude empty placeholder
           .map((m) => ({ role: m.role, content: m.content }));
 
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, history: history.slice(0, -1) }),
+          body: JSON.stringify({ query, history }),
         });
 
         if (!res.ok || !res.body) throw new Error("Chat failed");
@@ -141,7 +138,7 @@ export function useVelcro(): UseVelcroReturn {
                 updateMessage(assistantId, fullResponse);
               }
             } catch {
-              // malformed SSE line, skip
+              // malformed SSE line
             }
           }
         }
@@ -158,6 +155,9 @@ export function useVelcro(): UseVelcroReturn {
       } else {
         setStatus("idle");
       }
+
+      // Suppress unused variable warning
+      void userMessageId;
     },
     [messages, addMessage, updateMessage, speak]
   );
@@ -178,11 +178,5 @@ export function useVelcro(): UseVelcroReturn {
     }
   }, [status, recorder, runPipeline]);
 
-  return {
-    messages,
-    status,
-    startListening,
-    stopListening,
-    isActive: status !== "idle",
-  };
+  return { messages, status, startListening, stopListening, audioElement };
 }

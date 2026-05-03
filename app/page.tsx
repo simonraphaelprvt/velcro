@@ -1,29 +1,52 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useVelcro } from "@/hooks/useVelcro";
-import { MicButton } from "@/components/MicButton";
-import { ChatMessage } from "@/components/ChatMessage";
+import { VelcroOrb } from "@/components/VelcroOrb";
+import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
+
+// Status label shown below the orb
+const statusLabel: Record<string, string> = {
+  idle: "",
+  recording: "Hoere zu...",
+  transcribing: "Verarbeite...",
+  thinking: "Denkt...",
+  speaking: "Spricht...",
+};
 
 export default function Home() {
-  const { messages, status, startListening, stopListening } = useVelcro();
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const { messages, status, startListening, stopListening, audioElement } = useVelcro();
   const spaceActiveRef = useRef(false);
 
-  // Auto-scroll chat to bottom on new messages
+  // Content window: shows when latest assistant message has structured content
+  const [contentToDismiss, setContentToDismiss] = useState<string | null>(null);
+
+  const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const latestUser = [...messages].reverse().find((m) => m.role === "user");
+
+  // Detect structured content and auto-open window
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (
+      latestAssistant?.content &&
+      status === "idle" &&
+      hasStructuredContent(latestAssistant.content) &&
+      contentToDismiss !== latestAssistant.id
+    ) {
+      setContentToDismiss(latestAssistant.id ?? null);
+    }
+  }, [latestAssistant, status, contentToDismiss]);
+
+  const showContentWindow =
+    latestAssistant?.content &&
+    hasStructuredContent(latestAssistant.content) &&
+    contentToDismiss !== latestAssistant.id &&
+    status === "idle";
 
   // Spacebar push-to-talk
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat || spaceActiveRef.current) return;
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       e.preventDefault();
       spaceActiveRef.current = true;
       startListening();
@@ -50,53 +73,68 @@ export default function Home() {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  const isStreaming = status === "thinking";
-  const lastMessageId = messages[messages.length - 1]?.id;
+  const label = statusLabel[status];
 
   return (
-    <main className="flex h-screen flex-col bg-velcro-bg">
-      {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-velcro-border px-6 py-4">
-        <span className="font-mono text-[10px] tracking-[0.5em] text-velcro-dim">VELCRO</span>
-        <span
-          className={[
-            "h-1.5 w-1.5 rounded-full transition-colors duration-500",
-            status === "idle" ? "bg-velcro-dim" : "bg-velcro-accent-2",
-          ].join(" ")}
+    <main className="relative flex h-screen flex-col items-center justify-center overflow-hidden bg-velcro-bg">
+      {/* Ambient background glow behind orb */}
+      <div
+        className="pointer-events-none absolute h-[500px] w-[500px] rounded-full opacity-[0.07] blur-[100px]"
+        style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)" }}
+      />
+
+      {/* Wordmark — top left */}
+      <span className="absolute left-6 top-6 font-mono text-[10px] tracking-[0.5em] text-velcro-dim">
+        VELCRO
+      </span>
+
+      {/* Live status dot — top right */}
+      <span
+        className={[
+          "absolute right-6 top-6 h-1.5 w-1.5 rounded-full transition-colors duration-700",
+          status === "idle" ? "bg-velcro-border" : "bg-velcro-accent-2",
+        ].join(" ")}
+      />
+
+      {/* Central orb */}
+      <div className="flex flex-col items-center gap-14">
+        <VelcroOrb
+          status={status}
+          audioElement={audioElement}
+          onClick={startListening}
         />
-      </header>
 
-      {/* Chat history */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto flex max-w-2xl flex-col gap-4">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-2 pt-20 text-center">
-              <p className="text-sm text-velcro-dim">Bereit.</p>
-            </div>
+        {/* Status text below orb */}
+        <div className="h-4">
+          {label ? (
+            <p className="animate-fade-in text-xs tracking-widest text-velcro-dim">{label.toUpperCase()}</p>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Last exchange — fades in below, subtle */}
+      {(latestUser || latestAssistant) && (
+        <div className="absolute bottom-12 left-1/2 flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-6 text-center">
+          {latestUser && (
+            <p className="animate-fade-in line-clamp-1 text-xs text-velcro-dim">
+              {latestUser.content}
+            </p>
           )}
-
-          {messages.map((msg) => (
-            <ChatMessage
-              key={msg.id}
-              message={msg}
-              isStreaming={isStreaming && msg.id === lastMessageId}
-            />
-          ))}
-
-          <div ref={chatEndRef} />
+          {latestAssistant?.content && status !== "idle" && (
+            <p className="animate-fade-in line-clamp-2 text-xs text-velcro-text/70">
+              {latestAssistant.content}
+            </p>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Bottom mic area */}
-      <div className="border-t border-velcro-border px-6 py-8">
-        <div className="flex justify-center">
-          <MicButton
-            status={status}
-            onStart={startListening}
-            onStop={stopListening}
-          />
-        </div>
-      </div>
+      {/* Content window overlay for structured responses */}
+      {showContentWindow && latestAssistant && (
+        <ContentWindow
+          content={latestAssistant.content}
+          onDismiss={() => setContentToDismiss(latestAssistant.id ?? null)}
+        />
+      )}
     </main>
   );
 }
