@@ -83,8 +83,28 @@ create index if not exists conversations_created_at_idx
 -- The app uses service_role for writes, anon key never touches these tables.
 -- =============================================================================
 
+-- ---------------------------------------------------------------------------
+-- google_tokens — stores OAuth tokens for Calendar + Gmail (single row)
+-- Phase 6: run once after adding Google OAuth
+-- ---------------------------------------------------------------------------
+
+create table if not exists google_tokens (
+  id         integer primary key default 1,
+  access_token  text not null,
+  refresh_token text not null,
+  expiry_date   bigint not null,
+  updated_at    timestamptz not null default now(),
+  -- Enforce single row
+  check (id = 1)
+);
+
+-- =============================================================================
+-- Row Level Security
+-- =============================================================================
+
 alter table vault_chunks enable row level security;
 alter table conversations enable row level security;
+alter table google_tokens enable row level security;
 
 -- No public policies — all access goes through service_role or API routes.
 -- This means: nobody can query these tables directly via the anon key.

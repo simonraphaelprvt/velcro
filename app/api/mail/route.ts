@@ -1,7 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getRecentMails } from "@/lib/google";
 
-// Phase 6 — Gmail
-// Returns last N unread mails: { subject, from, snippet, date }[]
-export async function GET() {
-  return NextResponse.json({ error: "Not implemented yet — Phase 6" }, { status: 501 });
+export const runtime = "nodejs";
+
+export async function GET(req: NextRequest) {
+  const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "10", 10);
+
+  try {
+    const mails = await getRecentMails(limit);
+    return NextResponse.json({ mails });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
