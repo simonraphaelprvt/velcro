@@ -30,7 +30,8 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
   const rafRef = useRef<number | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const dataRef = useRef<Uint8Array | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dataRef = useRef<any>(null);
 
   // Connect audio element to Web Audio API for reactivity
   useEffect(() => {
