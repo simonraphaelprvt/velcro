@@ -17,8 +17,10 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background-color: #0a0a0f;
+  background-color: #07070d;
   color: #e8e8f0;
+  /* Transparent background so the iframe blends into the dashboard */
+  background-attachment: fixed;
 }
 
 /* Smooth scrollbar */
