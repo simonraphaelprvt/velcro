@@ -71,7 +71,7 @@ Siehe [Vault-Sync Anleitung](#vault-sync-python-script) weiter unten.
 | Phase | Status | Beschreibung |
 |---|---|---|
 | 1 | Abgeschlossen | Projekt-Setup, Skeleton |
-| 2 | Offen | Vault-Indexer (Python) |
+| 2 | Abgeschlossen | Vault-Indexer (Python) |
 | 3 | Offen | Chat-Backend mit Vault-Suche |
 | 4 | Offen | Voice-Pipeline (Whisper + ElevenLabs) |
 | 5 | Offen | Frontend (Voice-UI) |
@@ -80,14 +80,23 @@ Siehe [Vault-Sync Anleitung](#vault-sync-python-script) weiter unten.
 
 ---
 
-## Vault-Sync (Python-Script)
+## Phase 2: Vault-Sync einrichten
 
-Das Script `scripts/sync_vault.py` läuft lokal auf Simons Mac und indexiert den Obsidian Vault in Supabase.
+### Schritt 1: Supabase-Schema anlegen
 
-### Einrichtung
+1. Supabase Dashboard aufrufen: `https://supabase.com/dashboard`
+2. Dein Projekt > **SQL Editor** > **New query**
+3. Inhalt von `scripts/supabase_schema.sql` reinkopieren und ausfuehren
+
+Das legt an:
+- Tabelle `vault_chunks` mit pgvector-Index
+- Funktion `match_vault_chunks()` fuer Similarity-Search
+- Tabelle `conversations` fuer Chat-History
+- Row Level Security (kein direkter Anon-Zugriff)
+
+### Schritt 2: Python-Umgebung einrichten
 
 ```bash
-# Im scripts/ Verzeichnis
 cd scripts
 
 # Virtuelle Umgebung anlegen
@@ -96,59 +105,124 @@ source .venv/bin/activate
 
 # Dependencies installieren
 pip install -r requirements.txt
-
-# Environment anlegen
-cp .env.example .env
-# scripts/.env mit echten Werten befüllen
 ```
 
-### Manuell ausführen
+### Schritt 3: Environment anlegen
+
+```bash
+cp scripts/.env.example scripts/.env
+```
+
+Dann `scripts/.env` oeffnen und befuellen:
+
+| Variable | Wo zu finden |
+|---|---|
+| `OPENAI_API_KEY` | platform.openai.com > API keys |
+| `SUPABASE_URL` | Supabase > Settings > API > Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase > Settings > API > service_role |
+| `VAULT_PATH` | Bereits gesetzt: `/Users/simon/Claude Workspace/Simon's Brain` |
+
+### Schritt 4: Ersten Sync starten
 
 ```bash
 cd scripts
 source .venv/bin/activate
+
+# Dry-run: zeigt was indexiert werden wuerde, schreibt nichts
+python sync_vault.py --dry-run
+
+# Erster vollstaendiger Index
+python sync_vault.py --full
+
+# Danach immer nur inkrementell (nur geaenderte Dateien)
 python sync_vault.py
 ```
 
-### Supabase: Tabelle anlegen
+**Erwartete Ausgabe:**
+```
+VELCRO Vault Sync — 2026-05-03 07:00:00
+Vault:   /Users/simon/Claude Workspace/Simon's Brain
+Mode:    FULL
+------------------------------------------------------------
+Gefundene .md Dateien: 347
+Zu indexieren: 347  |  Unveraendert: 0
+[  1/347] Projekte/Porsche.md  (12 Chunks)
+[  2/347] Clients/Karin.md  (8 Chunks)
+...
+------------------------------------------------------------
+Fertig. 347 Dateien, 2841 Chunks indexiert.
+```
 
-SQL in Supabase SQL-Editor ausführen (Phase 2 Anleitung).
+### Schritt 5: Taeglichen Cron einrichten (Cowork Scheduled Task)
 
-### Als Scheduled Task (Cowork)
+Der Vault soll jeden Morgen um 07:00 Uhr automatisch synced werden.
 
-Phase 2 enthält die genaue Anleitung für den Cowork-Scheduler.
+**Option A: macOS launchd (empfohlen, kein extra Tool noetig)**
+
+```bash
+# Datei erstellen: ~/Library/LaunchAgents/dev.velcro.vault-sync.plist
+```
+
+Inhalt (Pfade anpassen):
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.velcro.vault-sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/simon/Desktop/Claude Workspace/VELCRO/scripts/.venv/bin/python</string>
+    <string>/Users/simon/Desktop/Claude Workspace/VELCRO/scripts/sync_vault.py</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/velcro-vault-sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/velcro-vault-sync.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/simon</string>
+  </dict>
+</dict>
+</plist>
+```
+
+Aktivieren:
+```bash
+launchctl load ~/Library/LaunchAgents/dev.velcro.vault-sync.plist
+# Deaktivieren: launchctl unload ~/Library/LaunchAgents/dev.velcro.vault-sync.plist
+# Log pruefen: tail -f /tmp/velcro-vault-sync.log
+```
+
+**Option B: Cowork Scheduled Task**
+
+In Cowork einen neuen Scheduled Task anlegen:
+- Command: `cd /Users/simon/Desktop/Claude\ Workspace/VELCRO/scripts && source .venv/bin/activate && python sync_vault.py`
+- Schedule: `0 7 * * *` (jeden Morgen 07:00)
 
 ---
 
-## Supabase-Schema
+## Supabase-Schema (Referenz)
 
-### vault_chunks
+Vollstaendiges Schema liegt in `scripts/supabase_schema.sql`.
 
-```sql
-create extension if not exists vector;
-
-create table vault_chunks (
-  id uuid primary key default gen_random_uuid(),
-  file_path text not null,
-  chunk_index integer not null,
-  content text not null,
-  embedding vector(1536),
-  last_synced timestamptz default now(),
-  unique(file_path, chunk_index)
-);
-
-create index on vault_chunks using ivfflat (embedding vector_cosine_ops);
-```
-
-### conversations
+Kernfunktion fuer Vault-Search:
 
 ```sql
-create table conversations (
-  id uuid primary key default gen_random_uuid(),
-  query text not null,
-  response text not null,
-  sources jsonb,
-  created_at timestamptz default now()
+select * from match_vault_chunks(
+  query_embedding := '[0.1, 0.2, ...]'::vector,
+  match_count := 8,
+  match_threshold := 0.3
 );
 ```
 
