@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "VELCRO",
   description: "Personal AI Assistant",
-  icons: {
-    icon: "/favicon.ico",
-  },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="de">
+    <html lang="de" className={inter.variable}>
       <body className="min-h-screen bg-velcro-bg font-sans antialiased">{children}</body>
     </html>
   );

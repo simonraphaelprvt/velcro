@@ -74,7 +74,7 @@ Siehe [Vault-Sync Anleitung](#vault-sync-python-script) weiter unten.
 | 2 | Abgeschlossen | Vault-Indexer (Python) |
 | 3 | Abgeschlossen | Chat-Backend mit Vault-Suche |
 | 4 | Abgeschlossen | Voice-Pipeline (Whisper + ElevenLabs) |
-| 5 | Offen | Frontend (Voice-UI) |
+| 5 | Abgeschlossen | Frontend (Voice-UI) |
 | 6 | Offen | Google Calendar + Gmail |
 | 7 | Optional | Note-Writing in Vault |
 
