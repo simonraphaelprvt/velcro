@@ -29,30 +29,44 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
   const rafRef = useRef<number | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-  // Connect audio element to Web Audio API for reactivity
+  // Connect audio element to Web Audio API for reactivity.
+  // We lazily create the AudioContext + AnalyserNode once and reuse them
+  // because createMediaElementSource() can only be called once per element.
   useEffect(() => {
     if (!audioElement || status !== "speaking") {
       setAudioScale(1);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       return;
     }
 
     let analyser: AnalyserNode;
-    // data lives in the closure — avoids the Uint8Array<ArrayBuffer> generic TS issue
     let data: Uint8Array;
 
     try {
-      const ctx = new AudioContext();
-      ctxRef.current = ctx;
-      const source = ctx.createMediaElementSource(audioElement);
-      analyser = ctx.createAnalyser();
-      analyser.fftSize = 64;
-      source.connect(analyser);
-      analyser.connect(ctx.destination);
-      analyserRef.current = analyser;
+      // Reuse existing context+analyser if already wired to this element
+      if (analyserRef.current && ctxRef.current) {
+        analyser = analyserRef.current;
+        ctxRef.current.resume().catch(() => {});
+      } else {
+        const ctx = new AudioContext();
+        ctxRef.current = ctx;
+        ctx.resume().catch(() => {});
+        const source = ctx.createMediaElementSource(audioElement);
+        sourceRef.current = source;
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        analyserRef.current = analyser;
+      }
       data = new Uint8Array(analyser.frequencyBinCount);
     } catch {
-      // Web Audio not available, fall back to CSS animation
+      // Web Audio not available — CSS animation still plays
       return;
     }
 
@@ -69,20 +83,13 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
     rafRef.current = requestAnimationFrame(tick);
 
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       setAudioScale(1);
     };
   }, [audioElement, status]);
-
-  // Clean up AudioContext when done speaking
-  useEffect(() => {
-    if (status !== "speaking" && ctxRef.current) {
-      ctxRef.current.close().catch(() => {});
-      ctxRef.current = null;
-      analyserRef.current = null;
-      sourceRef.current = null;
-    }
-  }, [status]);
 
   const isIdle = status === "idle";
   const isRecording = status === "recording";

@@ -23,6 +23,8 @@ export function useVelcro(): UseVelcroReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<VelcroStatus>("idle");
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  // Stable Audio element — pre-unlocked on first user gesture so autoplay works
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const recorder = useRecorder();
 
   const addMessage = useCallback((role: Message["role"], content: string): string => {
@@ -44,18 +46,31 @@ export function useVelcro(): UseVelcroReturn {
         body: JSON.stringify({ text }),
       });
 
-      if (!res.ok || !res.body) return;
+      if (!res.ok || !res.body) {
+        console.error("Speak API error:", res.status, await res.text().catch(() => ""));
+        return;
+      }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+
+      // Reuse the pre-unlocked audio element so autoplay policy doesn't block us
+      const audio = audioRef.current ?? new Audio();
+      audioRef.current = audio;
+      audio.src = url;
 
       setAudioElement(audio);
 
       await new Promise<void>((resolve) => {
         audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.play().catch(() => resolve());
+        audio.onerror = (e) => {
+          console.error("Audio playback error:", e);
+          resolve();
+        };
+        audio.play().catch((e) => {
+          console.error("audio.play() rejected:", e);
+          resolve();
+        });
       });
 
       URL.revokeObjectURL(url);
@@ -164,6 +179,16 @@ export function useVelcro(): UseVelcroReturn {
 
   const startListening = useCallback(async () => {
     if (status !== "idle") return;
+
+    // Unlock the Audio element on user gesture so later play() calls succeed
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    // Briefly play silence to mark this element as "user-gesture unlocked"
+    audioRef.current.src =
+      "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+    audioRef.current.play().catch(() => {});
+
     await recorder.start();
     setStatus("recording");
   }, [status, recorder]);
