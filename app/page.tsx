@@ -5,26 +5,24 @@ import { useVelcro } from "@/hooks/useVelcro";
 import { VelcroOrb } from "@/components/VelcroOrb";
 import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
 
-// Status label shown below the orb
 const statusLabel: Record<string, string> = {
-  idle: "",
-  recording: "Hoere zu...",
+  idle:        "",
+  recording:   "",           // shown inline on orb now
   transcribing: "Verarbeite...",
-  thinking: "Denkt...",
-  speaking: "Spricht...",
+  thinking:    "Denkt...",
+  speaking:    "Spricht...",
 };
 
 export default function Home() {
   const { messages, status, startListening, stopListening, analyserNode } = useVelcro();
   const spaceActiveRef = useRef(false);
 
-  // Content window: shows when latest assistant message has structured content
   const [contentToDismiss, setContentToDismiss] = useState<string | null>(null);
 
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-  const latestUser = [...messages].reverse().find((m) => m.role === "user");
+  const latestUser      = [...messages].reverse().find((m) => m.role === "user");
 
-  // Detect structured content and auto-open window
+  // Auto-open content window for structured responses
   useEffect(() => {
     if (
       latestAssistant?.content &&
@@ -42,27 +40,27 @@ export default function Home() {
     contentToDismiss !== latestAssistant.id &&
     status === "idle";
 
-  // Spacebar push-to-talk
+  // ── Toggle handler (click + spacebar) ──────────────────────────────
+  const toggleListening = useCallback(() => {
+    if (status === "idle")      startListening();
+    else if (status === "recording") stopListening();
+  }, [status, startListening, stopListening]);
+
+  // Spacebar toggles (no hold-to-talk — single press = start/stop)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat || spaceActiveRef.current) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       e.preventDefault();
       spaceActiveRef.current = true;
-      startListening();
+      toggleListening();
     },
-    [startListening]
+    [toggleListening]
   );
 
-  const handleKeyUp = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.code !== "Space" || !spaceActiveRef.current) return;
-      e.preventDefault();
-      spaceActiveRef.current = false;
-      stopListening();
-    },
-    [stopListening]
-  );
+  const handleKeyUp = useCallback((e: KeyboardEvent) => {
+    if (e.code === "Space") spaceActiveRef.current = false;
+  }, []);
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -77,16 +75,11 @@ export default function Home() {
 
   return (
     <main className="relative flex h-screen flex-col items-center justify-center overflow-hidden bg-velcro-bg">
-      {/* Ambient background glow behind orb */}
+      {/* Deep ambient radial glow */}
       <div
-        className="pointer-events-none absolute h-[500px] w-[500px] rounded-full opacity-[0.07] blur-[100px]"
-        style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)" }}
+        className="pointer-events-none absolute h-[600px] w-[600px] rounded-full opacity-[0.05] blur-[120px]"
+        style={{ background: "radial-gradient(circle, #6366f1, transparent 70%)" }}
       />
-
-      {/* Wordmark — top left */}
-      <span className="absolute left-6 top-6 font-mono text-[10px] tracking-[0.5em] text-velcro-dim">
-        VELCRO
-      </span>
 
       {/* Live status dot — top right */}
       <span
@@ -101,18 +94,20 @@ export default function Home() {
         <VelcroOrb
           status={status}
           analyserNode={analyserNode}
-          onClick={startListening}
+          onClick={toggleListening}
         />
 
-        {/* Status text below orb */}
+        {/* Status text */}
         <div className="h-4">
           {label ? (
-            <p className="animate-fade-in text-xs tracking-widest text-velcro-dim">{label.toUpperCase()}</p>
+            <p className="animate-fade-in text-xs tracking-widest text-velcro-dim">
+              {label.toUpperCase()}
+            </p>
           ) : null}
         </div>
       </div>
 
-      {/* Last exchange — fades in below, subtle */}
+      {/* Last exchange */}
       {(latestUser || latestAssistant) && (
         <div className="absolute bottom-12 left-1/2 flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-6 text-center">
           {latestUser && (
@@ -128,7 +123,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Content window overlay for structured responses */}
+      {/* Content window for structured responses */}
       {showContentWindow && latestAssistant && (
         <ContentWindow
           content={latestAssistant.content}

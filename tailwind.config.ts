@@ -84,6 +84,10 @@ const config: Config = {
         "ring-expand-delay": "ring-expand 1.4s ease-out 0.5s infinite",
         "slide-up": "slide-up 0.25s ease-out",
         "fade-in": "fade-in 0.2s ease-out",
+        // Orb living animations
+        "orb-float": "velcro-float 8s ease-in-out infinite",
+        "orb-drift": "velcro-drift 13s ease-in-out infinite",
+        "orb-ring-idle": "velcro-ring-idle 4s ease-in-out infinite",
       },
     },
   },

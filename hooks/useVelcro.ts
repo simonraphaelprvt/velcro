@@ -4,6 +4,24 @@ import { useState, useRef, useCallback } from "react";
 import { useRecorder } from "./useRecorder";
 import type { Message } from "@/lib/types";
 
+// Strip markdown so ElevenLabs doesn't read "asterisk asterisk" aloud.
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/gs, "$1")        // **bold**
+    .replace(/\*(.+?)\*/gs,     "$1")         // *italic*
+    .replace(/__(.+?)__/gs,     "$1")         // __bold__
+    .replace(/_(.+?)_/gs,       "$1")         // _italic_
+    .replace(/`{1,3}[^`\n]*`{1,3}/g, "")     // `code`
+    .replace(/#{1,6}\s+/g,      "")           // ## heading
+    .replace(/\[(.+?)\]\(.+?\)/g, "$1")       // [text](url)
+    .replace(/^[-*+]\s+/gm,     "")           // - bullet
+    .replace(/^\d+\.\s+/gm,     "")           // 1. numbered
+    .replace(/\|[^\n]+\|/g,     "")           // |table|
+    .replace(/^-{3,}$/gm,       "")           // ---
+    .replace(/\n{3,}/g,         "\n\n")
+    .trim();
+}
+
 export type VelcroStatus = "idle" | "recording" | "transcribing" | "thinking" | "speaking";
 
 interface UseVelcroReturn {
@@ -43,10 +61,13 @@ export function useVelcro(): UseVelcroReturn {
   const speak = useCallback(async (text: string) => {
     setStatus("speaking");
     try {
+      const cleanText = stripMarkdown(text);
+      if (!cleanText) { setStatus("idle"); return; }
+
       const res = await fetch("/api/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: cleanText }),
       });
 
       if (!res.ok) {
