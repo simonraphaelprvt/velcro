@@ -28,10 +28,11 @@ function randomIdle(): OrbTransform {
 
 function randomBesideWindow(side: "left" | "right"): OrbTransform {
   const sign = side === "right" ? 1 : -1;
+  // Wander around the panel edge: varying x to hug the border, y sweeps top to bottom
   return {
-    x:     sign * (250 + Math.random() * 70),
-    y:     (Math.random() - 0.5) * 200,
-    scale: 0.52 + Math.random() * 0.2,
+    x:     sign * (300 + Math.random() * 80),
+    y:     (Math.random() - 0.5) * 280,
+    scale: 0.48 + Math.random() * 0.22,
   };
 }
 

@@ -62,8 +62,14 @@ export function useVelcro(): UseVelcroReturn {
   const speak = useCallback(async (text: string) => {
     setStatus("speaking");
     try {
-      const cleanText = stripMarkdown(text);
-      if (!cleanText) { setStatus("idle"); return; }
+      const stripped = stripMarkdown(text);
+      if (!stripped) { setStatus("idle"); return; }
+
+      // Prepend greeting to the very first thing VELCRO says
+      const cleanText = !hasGreetedRef.current
+        ? `Hallo, Simon. ${stripped}`
+        : stripped;
+      hasGreetedRef.current = true;
 
       const res = await fetch("/api/speak", {
         method: "POST",
@@ -220,16 +226,9 @@ export function useVelcro(): UseVelcroReturn {
     }
     await audioCtxRef.current.resume();
 
-    // Greet Simon on the very first interaction
-    if (!hasGreetedRef.current) {
-      hasGreetedRef.current = true;
-      await speak("Hallo, Simon.");
-      // speak() resolves with status back to "idle" — now start recording
-    }
-
     await recorder.start();
     setStatus("recording");
-  }, [status, recorder, speak]);
+  }, [status, recorder]);
 
   const stopListening = useCallback(async () => {
     if (status !== "recording") return;

@@ -10,7 +10,6 @@ interface UseRecorderReturn {
   stop: () => Promise<Blob | null>;
 }
 
-// Detect the best supported audio format for this browser
 function getSupportedMimeType(): string {
   const candidates = [
     "audio/webm;codecs=opus",
@@ -29,25 +28,32 @@ function getSupportedMimeType(): string {
 export function useRecorder(): UseRecorderReturn {
   const [state, setState] = useState<RecorderState>("idle");
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef   = useRef<Blob[]>([]);
+  // Persistent stream — requested once, reused forever.
+  // This avoids the browser asking for mic permission on every recording.
+  const streamRef   = useRef<MediaStream | null>(null);
 
   const start = useCallback(async () => {
     if (state === "recording") return;
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    streamRef.current = stream;
+    // Reuse the existing stream if available — no new permission prompt
+    if (!streamRef.current) {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
 
     const mimeType = getSupportedMimeType();
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const recorder = new MediaRecorder(
+      streamRef.current,
+      mimeType ? { mimeType } : undefined
+    );
     recorderRef.current = recorder;
-    chunksRef.current = [];
+    chunksRef.current   = [];
 
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
 
-    recorder.start(100); // collect chunks every 100ms
+    recorder.start(100);
     setState("recording");
   }, [state]);
 
@@ -62,14 +68,10 @@ export function useRecorder(): UseRecorderReturn {
       recorder.onstop = () => {
         const mimeType = recorder.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: mimeType });
-
-        // Stop all mic tracks to release the microphone indicator
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
+        // Do NOT stop stream tracks — keeps mic permission alive for next use
         recorderRef.current = null;
-        chunksRef.current = [];
+        chunksRef.current   = [];
         setState("idle");
-
         resolve(blob.size > 0 ? blob : null);
       };
 

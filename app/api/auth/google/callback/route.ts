@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOAuthClient, saveTokens } from "@/lib/google";
+import { setAuthCookie } from "@/lib/auth";
 
 // Google redirects here after consent.
 // Exchanges the auth code for tokens and saves them to Supabase.
@@ -34,8 +35,10 @@ export async function GET(req: NextRequest) {
       expiry_date: tokens.expiry_date ?? Date.now() + 3600 * 1000,
     });
 
-    // Redirect back to the app
-    return NextResponse.redirect(new URL("/", req.url));
+    // Set the VELCRO auth cookie so Google login = fully logged in
+    const res = NextResponse.redirect(new URL("/", req.url));
+    res.cookies.set(setAuthCookie());
+    return res;
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     return NextResponse.json({ error: "OAuth fehlgeschlagen." }, { status: 500 });
