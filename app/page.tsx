@@ -40,26 +40,16 @@ export default function Home() {
   const { messages, status, startListening, stopListening, analyserNode } = useVelcro();
   const spaceActiveRef = useRef(false);
 
-  // Content window
-  const [contentDismissed, setContentDismissed] = useState<string | null>(null);
+  // Content window — opens automatically when response has structured content,
+  // closes only when user explicitly dismisses it.
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const latestUser      = [...messages].reverse().find((m) => m.role === "user");
-
-  useEffect(() => {
-    if (
-      latestAssistant?.content &&
-      status === "idle" &&
-      hasStructuredContent(latestAssistant.content) &&
-      contentDismissed !== latestAssistant.id
-    ) {
-      setContentDismissed(latestAssistant.id ?? null);
-    }
-  }, [latestAssistant, status, contentDismissed]);
 
   const showContentWindow =
     !!latestAssistant?.content &&
     hasStructuredContent(latestAssistant.content) &&
-    contentDismissed !== latestAssistant.id &&
+    latestAssistant.id !== dismissedId &&
     status === "idle";
 
   // ── Orb wander ───────────────────────────────────────────────────────
@@ -181,7 +171,7 @@ export default function Home() {
       {showContentWindow && latestAssistant && (
         <ContentWindow
           content={latestAssistant.content}
-          onDismiss={() => setContentDismissed(latestAssistant.id ?? null)}
+          onDismiss={() => setDismissedId(latestAssistant.id ?? null)}
         />
       )}
     </main>
