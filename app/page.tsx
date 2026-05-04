@@ -15,7 +15,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function Home() {
-  const { messages, status, startListening, stopListening, audioElement } = useVelcro();
+  const { messages, status, startListening, stopListening, analyserNode } = useVelcro();
   const spaceActiveRef = useRef(false);
 
   // Content window: shows when latest assistant message has structured content
@@ -100,7 +100,7 @@ export default function Home() {
       <div className="flex flex-col items-center gap-14">
         <VelcroOrb
           status={status}
-          audioElement={audioElement}
+          analyserNode={analyserNode}
           onClick={startListening}
         />
 

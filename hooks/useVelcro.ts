@@ -11,8 +11,8 @@ interface UseVelcroReturn {
   status: VelcroStatus;
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
-  // Exposed so VelcroOrb can connect Web Audio API for visualization
-  audioElement: HTMLAudioElement | null;
+  // AnalyserNode for real-time orb visualisation (null when not speaking)
+  analyserNode: AnalyserNode | null;
 }
 
 function makeId() {
@@ -22,9 +22,12 @@ function makeId() {
 export function useVelcro(): UseVelcroReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<VelcroStatus>("idle");
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-  // Stable Audio element — pre-unlocked on first user gesture so autoplay works
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
+
+  // AudioContext created once during a user gesture so Safari allows playback
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+
   const recorder = useRecorder();
 
   const addMessage = useCallback((role: Message["role"], content: string): string => {
@@ -46,35 +49,42 @@ export function useVelcro(): UseVelcroReturn {
         body: JSON.stringify({ text }),
       });
 
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         console.error("Speak API error:", res.status, await res.text().catch(() => ""));
         return;
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      // Decode via AudioContext so Safari autoplay policy can't block us.
+      // The AudioContext was created + resumed during the user gesture in startListening.
+      const ctx = audioCtxRef.current;
+      if (!ctx) {
+        console.error("No AudioContext — was startListening called first?");
+        return;
+      }
 
-      // Reuse the pre-unlocked audio element so autoplay policy doesn't block us
-      const audio = audioRef.current ?? new Audio();
-      audioRef.current = audio;
-      audio.src = url;
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
 
-      setAudioElement(audio);
+      const arrayBuffer = await res.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+
+      // Wire through the analyser for orb visualisation
+      const analyser = analyserRef.current!;
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+
+      setAnalyserNode(analyser);
 
       await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = (e) => {
-          console.error("Audio playback error:", e);
-          resolve();
-        };
-        audio.play().catch((e) => {
-          console.error("audio.play() rejected:", e);
-          resolve();
-        });
+        source.onended = () => resolve();
+        source.start(0);
       });
 
-      URL.revokeObjectURL(url);
-      setAudioElement(null);
+      setAnalyserNode(null);
     } catch (err) {
       console.error("TTS error:", err);
     } finally {
@@ -117,9 +127,8 @@ export function useVelcro(): UseVelcroReturn {
 
       let fullResponse = "";
       try {
-        // Build history snapshot before this exchange
         const history = messages
-          .filter((m) => m.content) // exclude empty placeholder
+          .filter((m) => m.content)
           .map((m) => ({ role: m.role, content: m.content }));
 
         const res = await fetch("/api/chat", {
@@ -171,7 +180,6 @@ export function useVelcro(): UseVelcroReturn {
         setStatus("idle");
       }
 
-      // Suppress unused variable warning
       void userMessageId;
     },
     [messages, addMessage, updateMessage, speak]
@@ -180,14 +188,16 @@ export function useVelcro(): UseVelcroReturn {
   const startListening = useCallback(async () => {
     if (status !== "idle") return;
 
-    // Unlock the Audio element on user gesture so later play() calls succeed
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
+    // Create (or reopen) AudioContext during user gesture — required by Safari
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      const ctx = new AudioContext();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
     }
-    // Briefly play silence to mark this element as "user-gesture unlocked"
-    audioRef.current.src =
-      "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-    audioRef.current.play().catch(() => {});
+    // Resume in case it was suspended (Safari suspends on creation)
+    await audioCtxRef.current.resume();
 
     await recorder.start();
     setStatus("recording");
@@ -203,5 +213,5 @@ export function useVelcro(): UseVelcroReturn {
     }
   }, [status, recorder, runPipeline]);
 
-  return { messages, status, startListening, stopListening, audioElement };
+  return { messages, status, startListening, stopListening, analyserNode };
 }

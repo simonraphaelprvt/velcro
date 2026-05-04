@@ -5,7 +5,7 @@ import type { VelcroStatus } from "@/hooks/useVelcro";
 
 interface VelcroOrbProps {
   status: VelcroStatus;
-  audioElement: HTMLAudioElement | null;
+  analyserNode: AnalyserNode | null;
   onClick: () => void;
 }
 
@@ -18,62 +18,32 @@ function getOrbAnimation(status: VelcroStatus): string {
     case "transcribing":
       return "animate-shimmer";
     case "speaking":
-      return ""; // driven by Web Audio API scale
+      return ""; // driven by Web Audio analyser scale
     default:
       return "animate-breathe";
   }
 }
 
-export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
+export function VelcroOrb({ status, analyserNode, onClick }: VelcroOrbProps) {
   const [audioScale, setAudioScale] = useState(1);
   const rafRef = useRef<number | null>(null);
-  const ctxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-  // Connect audio element to Web Audio API for reactivity.
-  // We lazily create the AudioContext + AnalyserNode once and reuse them
-  // because createMediaElementSource() can only be called once per element.
+  // Drive orb scale from the AnalyserNode passed in from useVelcro
   useEffect(() => {
-    if (!audioElement || status !== "speaking") {
-      setAudioScale(1);
+    if (!analyserNode || status !== "speaking") {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
+      setAudioScale(1);
       return;
     }
 
-    let analyser: AnalyserNode;
-    let data: Uint8Array;
-
-    try {
-      // Reuse existing context+analyser if already wired to this element
-      if (analyserRef.current && ctxRef.current) {
-        analyser = analyserRef.current;
-        ctxRef.current.resume().catch(() => {});
-      } else {
-        const ctx = new AudioContext();
-        ctxRef.current = ctx;
-        ctx.resume().catch(() => {});
-        const source = ctx.createMediaElementSource(audioElement);
-        sourceRef.current = source;
-        analyser = ctx.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-        analyser.connect(ctx.destination);
-        analyserRef.current = analyser;
-      }
-      data = new Uint8Array(analyser.frequencyBinCount);
-    } catch {
-      // Web Audio not available — CSS animation still plays
-      return;
-    }
-
+    const data = new Uint8Array(analyserNode.frequencyBinCount);
     let smoothed = 0;
 
     const tick = () => {
-      analyser.getByteFrequencyData(data);
+      analyserNode.getByteFrequencyData(data);
       const raw = data.reduce((a, b) => a + b, 0) / data.length / 255;
       smoothed = smoothed * 0.75 + raw * 0.25;
       setAudioScale(1 + smoothed * 0.18);
@@ -89,7 +59,7 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
       }
       setAudioScale(1);
     };
-  }, [audioElement, status]);
+  }, [analyserNode, status]);
 
   const isIdle = status === "idle";
   const isRecording = status === "recording";
@@ -124,7 +94,6 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
           "relative h-[200px] w-[200px] rounded-full",
           "transition-[box-shadow,filter] duration-500",
           getOrbAnimation(status),
-          // Glow intensity based on state
           isRecording
             ? "shadow-[0_0_80px_rgba(167,139,250,0.7),0_0_160px_rgba(124,58,237,0.4)]"
             : isSpeaking
@@ -132,7 +101,7 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
             : "shadow-[0_0_50px_rgba(167,139,250,0.35),0_0_100px_rgba(124,58,237,0.2)]",
         ].join(" ")}
       >
-        {/* Sphere gradient — light source at top-left for 3D feel */}
+        {/* Sphere gradient — light source top-left for 3D feel */}
         <div
           className="absolute inset-0 rounded-full"
           style={{
