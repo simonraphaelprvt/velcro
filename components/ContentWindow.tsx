@@ -10,6 +10,8 @@ interface ContentWindowProps {
 }
 
 export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
+  // Only render the structural part — the spoken intro is read aloud, not shown
+  const displayContent = extractDisplayContent(content);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onDismiss(); };
     window.addEventListener("keydown", onKey);
@@ -40,6 +42,8 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
         <div className="text-sm text-velcro-text">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
+            // displayContent = table/list only, prose stripped
+            children={displayContent}
             components={{
               table: ({ children }) => (
                 <div className="overflow-x-auto">
@@ -79,7 +83,6 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
               strong: ({ children }) => <strong className="font-semibold text-velcro-text">{children}</strong>,
             }}
           >
-            {content}
           </ReactMarkdown>
         </div>
 
@@ -91,12 +94,29 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
   );
 }
 
-// Heuristic: does this response contain structured content worth showing?
+// Only the structured part (table/code/list) — prose intro is spoken, not shown.
+export function extractDisplayContent(text: string): string {
+  const candidates: number[] = [];
+
+  const tableIdx = text.search(/^\|/m);
+  if (tableIdx >= 0) candidates.push(tableIdx);
+
+  const codeIdx = text.indexOf("```");
+  if (codeIdx >= 0) candidates.push(codeIdx);
+
+  // Numbered list: find first line starting with digit+dot
+  const numberedIdx = text.search(/^\d+\. /m);
+  if (numberedIdx >= 0) candidates.push(numberedIdx);
+
+  if (candidates.length === 0) return text;
+  return text.slice(Math.min(...candidates)).trim();
+}
+
 export function hasStructuredContent(text: string): boolean {
-  const hasTable       = /\|.+\|/.test(text) && /\|[-: ]+\|/.test(text);
-  const hasCodeBlock   = text.includes("```");
+  const hasTable        = /\|.+\|/.test(text) && /\|[-: ]+\|/.test(text);
+  const hasCodeBlock    = text.includes("```");
   const hasNumberedList = (text.match(/^\d+\./gm) ?? []).length >= 3;
-  const isBulletHeavy  = (text.match(/^[-*] /gm) ?? []).length >= 4;
-  const isLong         = text.length > 600;
+  const isBulletHeavy   = (text.match(/^[-*] /gm) ?? []).length >= 4;
+  const isLong          = text.length > 600;
   return hasTable || hasCodeBlock || hasNumberedList || (isBulletHeavy && isLong);
 }
