@@ -17,9 +17,12 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
   }, [onDismiss]);
 
   return (
-    // Sits on the same z-level as the orb — no backdrop, no overlay.
-    // Orb wanders beside it via page.tsx transform logic.
-    <div className="animate-slide-up pointer-events-auto absolute left-1/2 top-1/2 z-10 w-full max-w-lg -translate-x-1/2 -translate-y-1/2">
+    // Same visual layer — no backdrop. Orb (z-30) always floats above this (z-10).
+    // Animation has 0.3s delay so orb starts moving first, then panel fades in cleanly.
+    <div
+      className="pointer-events-auto absolute left-1/2 top-1/2 z-10 w-full max-w-lg -translate-x-1/2 -translate-y-1/2"
+      style={{ animation: "velcro-window-in 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both" }}
+    >
       <div className="relative max-h-[70vh] overflow-y-auto rounded-2xl border border-velcro-border bg-velcro-bg/90 p-6 shadow-[0_0_60px_rgba(99,102,241,0.12)] backdrop-blur-md">
         {/* Close */}
         <button

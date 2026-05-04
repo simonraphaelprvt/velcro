@@ -76,6 +76,12 @@ body {
   50%       { opacity: calc(var(--base-op, 0.4) * 0.2); }
 }
 
+/* Content window fade-in — delayed so orb moves first */
+@keyframes velcro-window-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 /* applied via inline style — just needs the keyframe defined globally */
 .velcro-particle {
   animation-name: velcro-twinkle;
