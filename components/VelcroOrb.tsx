@@ -26,12 +26,9 @@ function getOrbAnimation(status: VelcroStatus): string {
 
 export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
   const [audioScale, setAudioScale] = useState(1);
-  const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dataRef = useRef<any>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
 
   // Connect audio element to Web Audio API for reactivity
   useEffect(() => {
@@ -40,18 +37,20 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
       return;
     }
 
-    let ctx: AudioContext;
+    let analyser: AnalyserNode;
+    // data lives in the closure — avoids the Uint8Array<ArrayBuffer> generic TS issue
+    let data: Uint8Array;
+
     try {
-      ctx = new AudioContext();
+      const ctx = new AudioContext();
       ctxRef.current = ctx;
       const source = ctx.createMediaElementSource(audioElement);
-      sourceRef.current = source;
-      const analyser = ctx.createAnalyser();
+      analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       source.connect(analyser);
       analyser.connect(ctx.destination);
       analyserRef.current = analyser;
-      dataRef.current = new Uint8Array(analyser.frequencyBinCount);
+      data = new Uint8Array(analyser.frequencyBinCount);
     } catch {
       // Web Audio not available, fall back to CSS animation
       return;
@@ -60,12 +59,9 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
     let smoothed = 0;
 
     const tick = () => {
-      if (!analyserRef.current || !dataRef.current) return;
-      analyserRef.current.getByteFrequencyData(dataRef.current);
-      const raw = dataRef.current.reduce((a, b) => a + b, 0) / dataRef.current.length / 255;
-      // Smooth the value to avoid jitter
+      analyser.getByteFrequencyData(data);
+      const raw = data.reduce((a, b) => a + b, 0) / data.length / 255;
       smoothed = smoothed * 0.75 + raw * 0.25;
-      // Map 0..1 amplitude to scale 1.0..1.18
       setAudioScale(1 + smoothed * 0.18);
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -74,7 +70,6 @@ export function VelcroOrb({ status, audioElement, onClick }: VelcroOrbProps) {
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      // Don't close AudioContext here — it would silence the audio mid-playback
       setAudioScale(1);
     };
   }, [audioElement, status]);
