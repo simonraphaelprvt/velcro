@@ -4,22 +4,42 @@ import { useState, useRef, useCallback } from "react";
 import { useRecorder } from "./useRecorder";
 import type { Message } from "@/lib/types";
 
-// Strip markdown so ElevenLabs doesn't read "asterisk asterisk" aloud.
-function stripMarkdown(text: string): string {
+function stripInlineMarkdown(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/gs, "$1")        // **bold**
-    .replace(/\*(.+?)\*/gs,     "$1")         // *italic*
-    .replace(/__(.+?)__/gs,     "$1")         // __bold__
-    .replace(/_(.+?)_/gs,       "$1")         // _italic_
-    .replace(/`{1,3}[^`\n]*`{1,3}/g, "")     // `code`
-    .replace(/#{1,6}\s+/g,      "")           // ## heading
-    .replace(/\[(.+?)\]\(.+?\)/g, "$1")       // [text](url)
-    .replace(/^[-*+]\s+/gm,     "")           // - bullet
-    .replace(/^\d+\.\s+/gm,     "")           // 1. numbered
-    .replace(/\|[^\n]+\|/g,     "")           // |table|
-    .replace(/^-{3,}$/gm,       "")           // ---
+    .replace(/\*\*(.+?)\*\*/gs, "$1")
+    .replace(/\*(.+?)\*/gs,     "$1")
+    .replace(/__(.+?)__/gs,     "$1")
+    .replace(/_(.+?)_/gs,       "$1")
+    .replace(/`{1,3}[^`\n]*`{1,3}/g, "")
+    .replace(/#{1,6}\s+/g,      "")
+    .replace(/\[(.+?)\]\(.+?\)/g, "$1")
+    .replace(/^[-*+]\s+/gm,     "")
+    .replace(/^\d+\.\s+/gm,     "")
+    .replace(/\|[^\n]+\|/g,     "")
+    .replace(/^-{3,}$/gm,       "")
     .replace(/\n{3,}/g,         "\n\n")
     .trim();
+}
+
+// Extract the spoken portion of a response — the prose BEFORE any table/code block.
+// If Claude put no intro, returns a short fallback so VELCRO always speaks.
+function extractSpokenText(text: string): string {
+  // Find where the first table or code block starts
+  const tableStart = text.search(/^\|/m);
+  const codeStart  = text.indexOf("```");
+  const listStart  = text.search(/^\d+\. /m);
+
+  let cutAt = text.length;
+  if (tableStart > 0) cutAt = Math.min(cutAt, tableStart);
+  if (codeStart  > 0) cutAt = Math.min(cutAt, codeStart);
+  if (listStart  > 0) cutAt = Math.min(cutAt, listStart);
+
+  const before = stripInlineMarkdown(text.slice(0, cutAt));
+  if (before.length > 4) return before;
+
+  // Fallback: Claude skipped the intro — speak the full stripped text
+  const full = stripInlineMarkdown(text);
+  return full || "Hier ist die Übersicht für Sie.";
 }
 
 export type VelcroStatus = "idle" | "recording" | "transcribing" | "thinking" | "speaking";
@@ -62,13 +82,13 @@ export function useVelcro(): UseVelcroReturn {
   const speak = useCallback(async (text: string) => {
     setStatus("speaking");
     try {
-      const stripped = stripMarkdown(text);
-      if (!stripped) { setStatus("idle"); return; }
+      // Extract spoken prose — text before tables/code, never empty
+      const spoken = extractSpokenText(text);
 
       // Prepend greeting to the very first thing VELCRO says
       const cleanText = !hasGreetedRef.current
-        ? `Hallo, Simon. ${stripped}`
-        : stripped;
+        ? `Hallo, Simon. ${spoken}`
+        : spoken;
       hasGreetedRef.current = true;
 
       const res = await fetch("/api/speak", {
