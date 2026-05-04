@@ -43,8 +43,9 @@ export function useVelcro(): UseVelcroReturn {
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
   // AudioContext created once during a user gesture so Safari allows playback
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioCtxRef  = useRef<AudioContext | null>(null);
+  const analyserRef  = useRef<AnalyserNode | null>(null);
+  const hasGreetedRef = useRef(false);
 
   const recorder = useRecorder();
 
@@ -217,12 +218,18 @@ export function useVelcro(): UseVelcroReturn {
       audioCtxRef.current = ctx;
       analyserRef.current = analyser;
     }
-    // Resume in case it was suspended (Safari suspends on creation)
     await audioCtxRef.current.resume();
+
+    // Greet Simon on the very first interaction
+    if (!hasGreetedRef.current) {
+      hasGreetedRef.current = true;
+      await speak("Hallo, Simon.");
+      // speak() resolves with status back to "idle" — now start recording
+    }
 
     await recorder.start();
     setStatus("recording");
-  }, [status, recorder]);
+  }, [status, recorder, speak]);
 
   const stopListening = useCallback(async () => {
     if (status !== "recording") return;

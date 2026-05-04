@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await anthropic.messages.create({
             model: MODEL,
-            max_tokens: 2048,
+            max_tokens: 700,
             system: VELCRO_SYSTEM_PROMPT,
             tools: VELCRO_TOOLS,
             messages,
