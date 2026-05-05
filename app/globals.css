@@ -76,6 +76,15 @@ body {
   50%       { opacity: calc(var(--base-op, 0.4) * 0.2); }
 }
 
+/* Wake word indicator — soft breathing pulse */
+@keyframes velcro-wake-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);   box-shadow: 0 0 0 0 rgba(167,139,250,0.5); }
+  50%      { opacity: 0.5; transform: scale(1.4); box-shadow: 0 0 0 6px rgba(167,139,250,0); }
+}
+.animate-wake-pulse {
+  animation: velcro-wake-pulse 2.2s ease-in-out infinite;
+}
+
 /* Content window fade-in — delayed so orb moves first */
 @keyframes velcro-window-in {
   from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }

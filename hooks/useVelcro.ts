@@ -233,6 +233,28 @@ export function useVelcro(): UseVelcroReturn {
     [messages, addMessage, updateMessage, speak]
   );
 
+  // Soft "wake" chirp — a tiny rising sine pulse via WebAudio.
+  // Synthesized live so we don't ship an audio file.
+  const playWakeChirp = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx || ctx.state !== "running") return;
+    try {
+      const now  = ctx.currentTime;
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(660, now);
+      osc.frequency.exponentialRampToValueAtTime(990, now + 0.13);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch { /* ignore */ }
+  }, []);
+
   const startListening = useCallback(async () => {
     if (status !== "idle") return;
 
@@ -246,9 +268,12 @@ export function useVelcro(): UseVelcroReturn {
     }
     await audioCtxRef.current.resume();
 
+    // Acoustic feedback so user knows VELCRO is listening
+    playWakeChirp();
+
     await recorder.start();
     setStatus("recording");
-  }, [status, recorder]);
+  }, [status, recorder, playWakeChirp]);
 
   const stopListening = useCallback(async () => {
     if (status !== "recording") return;

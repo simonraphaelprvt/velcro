@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useVelcro } from "@/hooks/useVelcro";
+import { useWakeWord } from "@/hooks/useWakeWord";
 import { VelcroOrb } from "@/components/VelcroOrb";
 import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
+import { FEATURES } from "@/lib/config";
 
 const statusLabel: Record<string, string> = {
   idle:         "",
@@ -80,6 +82,46 @@ export default function Home() {
     else if (status === "recording") stopListening();
   }, [status, startListening, stopListening]);
 
+  // ── Wake Word ("Hey VELCRO") ──────────────────────────────────────────
+  const { supported: wakeSupported, listening: wakeListening } = useWakeWord({
+    enabled: FEATURES.wakeWord,
+    status,
+    onWake: () => {
+      if (status === "idle") startListening();
+    },
+  });
+
+  // ── First-touch primer ────────────────────────────────────────────────
+  // Wake-word callbacks aren't a "user gesture" in Safari, so AudioContext
+  // creation inside startListening() can fail when triggered by voice. Prime
+  // it on ANY first user interaction (click anywhere, key press) so the
+  // wake-word path works on subsequent activations.
+  const [primed, setPrimed] = useState(false);
+  useEffect(() => {
+    if (primed) return;
+    const prime = () => {
+      // Touch the recorder + AudioContext path silently so Safari unlocks audio.
+      // We don't actually start recording — just trigger the gesture lock.
+      try {
+        // A no-op AudioContext.resume() inside a real gesture is enough.
+        const Ctx = window.AudioContext;
+        if (Ctx) {
+          const ctx = new Ctx();
+          ctx.resume().catch(() => {});
+          // Don't keep the throwaway context — let it close.
+          setTimeout(() => ctx.close().catch(() => {}), 0);
+        }
+      } catch { /* ignore */ }
+      setPrimed(true);
+    };
+    window.addEventListener("pointerdown", prime, { once: true, passive: true });
+    window.addEventListener("keydown",     prime, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", prime);
+      window.removeEventListener("keydown",     prime);
+    };
+  }, [primed]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.code !== "Space" || e.repeat || spaceActiveRef.current) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -115,6 +157,21 @@ export default function Home() {
         "absolute right-6 top-6 h-1.5 w-1.5 rounded-full transition-colors duration-700",
         status === "idle" ? "bg-velcro-border" : "bg-velcro-accent-2",
       ].join(" ")} />
+
+      {/* Wake-word indicator — bottom right, only when supported */}
+      {FEATURES.wakeWord && wakeSupported && (
+        <div className="pointer-events-none absolute bottom-5 right-6 flex items-center gap-2">
+          <span
+            className={[
+              "h-1.5 w-1.5 rounded-full transition-colors duration-500",
+              wakeListening ? "bg-velcro-accent animate-wake-pulse" : "bg-velcro-border",
+            ].join(" ")}
+          />
+          <span className="text-[9px] tracking-[0.3em] text-velcro-dim/60">
+            {wakeListening ? "HEY VELCRO" : "—"}
+          </span>
+        </div>
+      )}
 
       {/* Content window — rendered BEFORE orb in DOM so orb sits on top (z-30) */}
       {showContentWindow && latestAssistant && (
