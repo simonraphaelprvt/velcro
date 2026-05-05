@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic, MODEL, VELCRO_SYSTEM_PROMPT } from "@/lib/anthropic";
+import { anthropic, MODEL, buildSystemPrompt } from "@/lib/anthropic";
 import { VELCRO_TOOLS, executeTool } from "@/lib/tools";
 import { getServiceSupabase } from "@/lib/supabase";
 import type { Message } from "@/lib/types";
@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 
       try {
+        // System prompt is built per-request so today's date is current
+        const systemPrompt = buildSystemPrompt();
+
         // Build message array for the agentic loop
         const messages: Anthropic.MessageParam[] = [
           ...history.map((m) => ({
@@ -51,8 +54,8 @@ export async function POST(req: NextRequest) {
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await anthropic.messages.create({
             model: MODEL,
-            max_tokens: 700,
-            system: VELCRO_SYSTEM_PROMPT,
+            max_tokens: 2000,
+            system: systemPrompt,
             tools: VELCRO_TOOLS,
             messages,
           });
@@ -72,20 +75,39 @@ export async function POST(req: NextRequest) {
           }
 
           // Execute all tool calls in parallel
-          const toolResults = await Promise.all(
+          const executed = await Promise.all(
             toolBlocks.map(async (block) => {
               toolsUsed.push(block.name);
               const result = await executeTool(
                 block.name,
                 block.input as Record<string, unknown>
               );
-              return {
-                type: "tool_result" as const,
-                tool_use_id: block.id,
-                content: result,
-              };
+              return { block, result };
             })
           );
+
+          // ── PANEL SHORT-CIRCUIT ─────────────────────────────────────
+          // If any tool returned a VELCRO_PANEL envelope, we MUST pass it
+          // through verbatim — Claude tends to paraphrase the JSON away in
+          // a follow-up turn, which destroys the visual panel. So we end
+          // the loop here and use the tool's output as the final response.
+          // We also include any prose Claude wrote in this same turn.
+          const panelResult = executed.find((e) => /VELCRO_PANEL:/.test(e.result));
+          if (panelResult) {
+            const claudeIntro = textBlocks.map((b) => b.text).join("").trim();
+            // If Claude wrote intro prose this turn, prepend it BEFORE the
+            // tool's prose summary — gives a richer spoken intro, then panel.
+            finalResponse = claudeIntro
+              ? `${claudeIntro}\n\n${panelResult.result}`
+              : panelResult.result;
+            break;
+          }
+
+          const toolResults = executed.map(({ block, result }) => ({
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: result,
+          }));
 
           // Append assistant turn + tool results for next round
           messages.push(

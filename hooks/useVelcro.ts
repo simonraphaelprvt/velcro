@@ -21,25 +21,41 @@ function stripInlineMarkdown(text: string): string {
     .trim();
 }
 
-// Extract the spoken portion of a response — the prose BEFORE any table/code block.
+// Normalise text for TTS — replace English words ElevenLabs mispronounces in German context.
+// Keep only semantic replacements (real German words). Phonetic hacks like "Köhl" or "Miiting"
+// confuse ElevenLabs and produce silence or garbled output — removed.
+function normalizeForSpeech(text: string): string {
+  return text
+    .replace(/\bTodos\b/g, "Aufgaben")
+    .replace(/\bTodo\b/g,  "Aufgabe")
+    .replace(/\bOKs?\b/g,  "okay");
+}
+
+// Extract the spoken portion of a response — the prose BEFORE any structured block.
+// Cuts at: tables (|), code blocks (```), numbered lists (1. ), or ## headings.
 // If Claude put no intro, returns a short fallback so VELCRO always speaks.
 function extractSpokenText(text: string): string {
-  // Find where the first table or code block starts
-  const tableStart = text.search(/^\|/m);
-  const codeStart  = text.indexOf("```");
-  const listStart  = text.search(/^\d+\. /m);
+  const tableStart   = text.search(/^\|/m);
+  const codeStart    = text.indexOf("```");
+  const numberedList = text.search(/^\d+\. /m);
+  const headingStart = text.search(/^#{1,6} /m);
+  const panelStart   = text.search(/^VELCRO_PANEL:/m);
 
   let cutAt = text.length;
-  if (tableStart > 0) cutAt = Math.min(cutAt, tableStart);
-  if (codeStart  > 0) cutAt = Math.min(cutAt, codeStart);
-  if (listStart  > 0) cutAt = Math.min(cutAt, listStart);
+  if (tableStart   > 0) cutAt = Math.min(cutAt, tableStart);
+  if (codeStart    > 0) cutAt = Math.min(cutAt, codeStart);
+  if (numberedList > 0) cutAt = Math.min(cutAt, numberedList);
+  if (headingStart > 0) cutAt = Math.min(cutAt, headingStart);
+  if (panelStart   > 0) cutAt = Math.min(cutAt, panelStart);
 
-  const before = stripInlineMarkdown(text.slice(0, cutAt));
+  const before = normalizeForSpeech(stripInlineMarkdown(text.slice(0, cutAt)));
   if (before.length > 4) return before;
 
-  // Fallback: Claude skipped the intro — speak the full stripped text
-  const full = stripInlineMarkdown(text);
-  return full || "Hier ist die Übersicht für Sie.";
+  // Fallback: Claude skipped the intro — speak the first 2 sentences only
+  // to avoid reading the entire structured block aloud.
+  const full = normalizeForSpeech(stripInlineMarkdown(text));
+  const sentences = full.match(/[^.!?]+[.!?]+/g) ?? [];
+  return sentences.slice(0, 2).join(" ").trim() || "Hier ist die Übersicht für Sie.";
 }
 
 export type VelcroStatus = "idle" | "recording" | "transcribing" | "thinking" | "speaking";

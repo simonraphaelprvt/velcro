@@ -15,12 +15,21 @@
  * Lifecycle:
  *   start()  — begin listening (or resume after pause)
  *   pause()  — stop listening, do not auto-restart (use during VELCRO speech)
+ *   resume() — resume after pause
  *   stop()   — fully tear down
  *
  * Browser support:
  *   - Chrome (desktop + Android): ✓
- *   - Safari (macOS + iPad iOS 14.5+): ✓
+ *   - Safari (macOS + iOS 14.5+): ✓ (with special handling — see below)
  *   - Firefox: ✗ (no SpeechRecognition support)
+ *
+ * Safari note:
+ *   SpeechRecognition.start() requires a user gesture in Safari. To work
+ *   around this we NEVER call recognition.stop() in pause() — instead we
+ *   keep recognition running at all times and gate the callback via a
+ *   `paused` flag. If recognition ends by itself (silence / error), we
+ *   re-attach a one-time pointerdown listener so the next user touch
+ *   restarts it.
  */
 
 // Minimal SpeechRecognition types — these aren't in the default DOM lib.
@@ -63,15 +72,23 @@ declare global {
 
 export type WakeWordCallback = () => void;
 
-// Tolerant variants — Whisper-like recognizers may transcribe differently.
+// Tolerant variants — recognizers may transcribe differently.
+// German de-DE and English en-US recognizers both handle "velcro" differently.
 const WAKE_PHRASES = [
   "hey velcro",
   "hey velco",
   "hey wellcro",
   "hey velcrow",
+  "hey velcros",
+  "hey belcro",
+  "hey feltro",
   "hi velcro",
   "ok velcro",
+  "okay velcro",
   "velcro",   // bare keyword as a forgiving last-resort match
+  "welcro",   // German speech engine variant
+  "belkro",
+  "velkro",
 ];
 
 export class WakeWordDetector {
@@ -84,12 +101,23 @@ export class WakeWordDetector {
   /** True while a SpeechRecognition session is live. */
   private running = false;
 
-  /** True when paused via .pause() — won't auto-restart on .onend(). */
+  /** True when paused via .pause() — callbacks are silenced. */
   private paused = false;
 
   /** Cooldown to prevent rapid-fire wake events from interim results. */
   private lastFireAt = 0;
   private cooldownMs = 1500;
+
+  /**
+   * True on Safari (macOS and iOS). Safari requires a user gesture to call
+   * recognition.start(), so we keep recognition running continuously and
+   * only gate via the paused flag rather than stopping and restarting.
+   */
+  private get isSafari(): boolean {
+    if (typeof navigator === "undefined") return false;
+    const ua = navigator.userAgent;
+    return /Safari/.test(ua) && !/Chrome/.test(ua) && !/CriOS/.test(ua);
+  }
 
   constructor() {
     if (typeof window === "undefined") return;
@@ -99,17 +127,19 @@ export class WakeWordDetector {
     const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = "de-DE";
-    recognition.maxAlternatives = 2;
+    // "Hey VELCRO" is an English phrase — use en-US so the recognizer doesn't
+    // mangle it. German de-DE transcribes "velcro" as "Weltco", "Belcro", etc.
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 3;
 
     recognition.onstart = () => {
       this.running = true;
     };
 
     recognition.onresult = (e) => {
-      if (this.paused) return;
+      // Always gate — whether paused explicitly or not yet active
+      if (this.paused || !this.active) return;
 
-      // Walk through all new results since resultIndex
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
         const transcript = result[0]?.transcript?.toLowerCase() ?? "";
@@ -132,15 +162,21 @@ export class WakeWordDetector {
         this.active = false;
         return;
       }
-      // 'no-speech' and 'network' just mean restart in onend
+      // 'no-speech', 'network', 'audio-capture' — just let onend handle restart
       if (e.error === "aborted") return;
     };
 
     recognition.onend = () => {
       this.running = false;
-      // Auto-restart if we're still meant to be listening
-      if (this.active && !this.paused) {
-        // Small backoff to avoid hammering the engine
+
+      if (!this.active || this.paused) return;
+
+      if (this.isSafari) {
+        // Safari: can't restart from setTimeout — attach a one-shot pointer
+        // listener so the NEXT user touch restarts recognition.
+        this.waitForGestureToRestart();
+      } else {
+        // Non-Safari: safe to restart from setTimeout
         setTimeout(() => this.tryStart(), 300);
       }
     };
@@ -153,7 +189,10 @@ export class WakeWordDetector {
     return this.recognition !== null;
   }
 
-  /** Begin (or resume) listening for the wake word. */
+  /**
+   * Begin (or resume) listening for the wake word.
+   * Must be called from a user gesture on Safari.
+   */
   start(): void {
     if (!this.recognition) return;
     this.active = true;
@@ -163,19 +202,35 @@ export class WakeWordDetector {
 
   /**
    * Pause listening (e.g. while VELCRO is recording or speaking).
-   * Won't auto-restart — call resume() when ready.
+   * On Safari we do NOT stop the recognition — we just mute the callback.
+   * This avoids the user-gesture requirement for start() on resume.
    */
   pause(): void {
     this.paused = true;
+    if (this.isSafari) {
+      // Keep recognition alive — just gate via paused flag in onresult.
+      return;
+    }
     if (this.recognition && this.running) {
       try { this.recognition.stop(); } catch { /* ignore */ }
     }
   }
 
-  /** Resume after pause(). No-op if never started. */
+  /**
+   * Resume after pause().
+   * On Safari recognition is still running — just unmute the callback.
+   */
   resume(): void {
     if (!this.recognition || !this.active) return;
     this.paused = false;
+    if (this.isSafari) {
+      // Recognition never stopped — no restart needed.
+      // But if it somehow died, wait for the next user touch.
+      if (!this.running) {
+        this.waitForGestureToRestart();
+      }
+      return;
+    }
     this.tryStart();
   }
 
@@ -195,11 +250,26 @@ export class WakeWordDetector {
 
   /** Defensive start — recognition.start() throws if already running. */
   private tryStart(): void {
-    if (!this.recognition || this.running || this.paused) return;
+    if (!this.recognition || this.running || this.paused || !this.active) return;
     try {
       this.recognition.start();
     } catch {
       // Already started or transient error — ignore
     }
+  }
+
+  /**
+   * Safari-only: attach a one-shot pointerdown listener so the next
+   * user touch restarts the recognition session. This is the only reliable
+   * way to satisfy Safari's user-gesture requirement.
+   */
+  private waitForGestureToRestart(): void {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      if (this.active && !this.paused && !this.running) {
+        this.tryStart();
+      }
+    };
+    window.addEventListener("pointerdown", handler, { once: true, passive: true });
   }
 }
