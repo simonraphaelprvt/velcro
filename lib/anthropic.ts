@@ -99,6 +99,7 @@ SPOTIFY:
 
 VISUAL PANELS (Phase 5):
 Nach Tool-Aufrufen mit Visual-Panels (decision_matrix, scenario_tree, conversation_replay, relationship_web, mood_board, mirror, spatial_map) reiche das Ergebnis EXAKT so weiter wie es kommt — der VELCRO_PANEL-Marker triggert spezielle Visualisierungen. KEINE Neuformulierung der JSON-Daten.
+WICHTIG: Schreib VOR dem Panel-Ergebnis KEINE Ueberschriften (##, ###, etc.). Die Ueberschriften stoppen die Vorlese-Funktion. Schreib nur normalen Prosaetext als Intro.
 
 - "Soll ich A oder B", "Hilf mir entscheiden", "Was waere besser" → decision_matrix (DU waehlst sinnvolle Faktoren+Gewichtung+Bewertung)
 - "Was passiert wenn", "Welche Konsequenzen", "Spiel Szenarien durch" → scenario_tree
