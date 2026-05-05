@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { parsePanel, PanelRenderer, stripPanelFromText } from "@/components/Panels";
 
 interface ContentWindowProps {
   content: string;
@@ -10,8 +11,10 @@ interface ContentWindowProps {
 }
 
 export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
+  // First check for a Phase 5 visual panel — overrides Markdown rendering.
+  const panel = parsePanel(content);
   // Only render the structural part — the spoken intro is read aloud, not shown
-  const displayContent = extractDisplayContent(content);
+  const displayContent = panel ? "" : extractDisplayContent(content);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onDismiss(); };
     window.addEventListener("keydown", onKey);
@@ -38,8 +41,11 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
           </svg>
         </button>
 
-        {/* Content */}
+        {/* Content — visual panel overrides Markdown if present */}
         <div className="text-sm text-velcro-text">
+          {panel ? (
+            <PanelRenderer envelope={panel} />
+          ) : (
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             // displayContent = table/list only, prose stripped
@@ -84,6 +90,7 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
             }}
           >
           </ReactMarkdown>
+          )}
         </div>
 
         <p className="mt-5 text-center text-[9px] tracking-widest text-velcro-dim/40">
@@ -94,8 +101,14 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
   );
 }
 
-// Only the structured part (table/code/list) — prose intro is spoken, not shown.
+// Only the structured part — prose intro is spoken, not shown.
+// Cuts at: tables (|), code (```), numbered lists (1. ), ## headings, or VELCRO_PANEL marker.
 export function extractDisplayContent(text: string): string {
+  // If a panel marker is present, hide everything from that point on
+  // (the panel itself renders separately; raw JSON should NEVER show).
+  const panelIdx = text.search(/VELCRO_PANEL:/);
+  if (panelIdx >= 0) text = text.slice(0, panelIdx).trim();
+
   const candidates: number[] = [];
 
   const tableIdx = text.search(/^\|/m);
@@ -104,19 +117,29 @@ export function extractDisplayContent(text: string): string {
   const codeIdx = text.indexOf("```");
   if (codeIdx >= 0) candidates.push(codeIdx);
 
-  // Numbered list: find first line starting with digit+dot
   const numberedIdx = text.search(/^\d+\. /m);
   if (numberedIdx >= 0) candidates.push(numberedIdx);
+
+  const headingIdx = text.search(/^#{1,6} /m);
+  if (headingIdx >= 0) candidates.push(headingIdx);
 
   if (candidates.length === 0) return text;
   return text.slice(Math.min(...candidates)).trim();
 }
 
 export function hasStructuredContent(text: string): boolean {
+  // Phase 5 — explicit panel marker always counts
+  if (/^VELCRO_PANEL:/m.test(text)) return true;
   const hasTable        = /\|.+\|/.test(text) && /\|[-: ]+\|/.test(text);
   const hasCodeBlock    = text.includes("```");
   const hasNumberedList = (text.match(/^\d+\./gm) ?? []).length >= 3;
-  const isBulletHeavy   = (text.match(/^[-*] /gm) ?? []).length >= 4;
-  const isLong          = text.length > 600;
-  return hasTable || hasCodeBlock || hasNumberedList || (isBulletHeavy && isLong);
+  const hasHeadings     = (text.match(/^#{1,6} /gm) ?? []).length >= 1;
+  const isBulletHeavy   = (text.match(/^[-*] /gm) ?? []).length >= 3;
+  const isLong          = text.length > 400;
+  // Headings + bullets = a brief / panel layout → always show
+  return hasTable
+      || hasCodeBlock
+      || hasNumberedList
+      || (hasHeadings && isBulletHeavy)
+      || (isBulletHeavy && isLong);
 }

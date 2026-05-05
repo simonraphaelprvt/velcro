@@ -17,25 +17,25 @@ export const FEATURES = {
   wakeWord: flag(process.env.NEXT_PUBLIC_FEATURE_WAKE_WORD, true),
 
   // Phase 2 — Call Preparation
-  callPrep: flag(process.env.NEXT_PUBLIC_FEATURE_CALL_PREP, false),
+  callPrep: flag(process.env.NEXT_PUBLIC_FEATURE_CALL_PREP, true),
 
   // Phase 3 — Debrief & Morning Brief
-  debrief: flag(process.env.NEXT_PUBLIC_FEATURE_DEBRIEF, false),
-  morningBrief: flag(process.env.NEXT_PUBLIC_FEATURE_MORNING_BRIEF, false),
+  debrief: flag(process.env.NEXT_PUBLIC_FEATURE_DEBRIEF, true),
+  morningBrief: flag(process.env.NEXT_PUBLIC_FEATURE_MORNING_BRIEF, true),
 
   // Phase 4 — Quality of Life
-  spotify: flag(process.env.NEXT_PUBLIC_FEATURE_SPOTIFY, false),
-  webSearch: flag(process.env.NEXT_PUBLIC_FEATURE_WEB_SEARCH, false),
-  weather: flag(process.env.NEXT_PUBLIC_FEATURE_WEATHER, false),
+  spotify: flag(process.env.NEXT_PUBLIC_FEATURE_SPOTIFY, true),
+  webSearch: flag(process.env.NEXT_PUBLIC_FEATURE_WEB_SEARCH, true),
+  weather: flag(process.env.NEXT_PUBLIC_FEATURE_WEATHER, true),
 
   // Phase 5 — Visual Context Panels
-  spatialMap: flag(process.env.NEXT_PUBLIC_FEATURE_SPATIAL_MAP, false),
-  decisionMatrix: flag(process.env.NEXT_PUBLIC_FEATURE_DECISION_MATRIX, false),
-  conversationReplay: flag(process.env.NEXT_PUBLIC_FEATURE_CONVERSATION_REPLAY, false),
-  scenario: flag(process.env.NEXT_PUBLIC_FEATURE_SCENARIO, false),
-  relationshipWeb: flag(process.env.NEXT_PUBLIC_FEATURE_RELATIONSHIP_WEB, false),
-  moodBoard: flag(process.env.NEXT_PUBLIC_FEATURE_MOOD_BOARD, false),
-  mirror: flag(process.env.NEXT_PUBLIC_FEATURE_MIRROR, false),
+  spatialMap: flag(process.env.NEXT_PUBLIC_FEATURE_SPATIAL_MAP, true),
+  decisionMatrix: flag(process.env.NEXT_PUBLIC_FEATURE_DECISION_MATRIX, true),
+  conversationReplay: flag(process.env.NEXT_PUBLIC_FEATURE_CONVERSATION_REPLAY, true),
+  scenario: flag(process.env.NEXT_PUBLIC_FEATURE_SCENARIO, true),
+  relationshipWeb: flag(process.env.NEXT_PUBLIC_FEATURE_RELATIONSHIP_WEB, true),
+  moodBoard: flag(process.env.NEXT_PUBLIC_FEATURE_MOOD_BOARD, true),
+  mirror: flag(process.env.NEXT_PUBLIC_FEATURE_MIRROR, true),
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURES;

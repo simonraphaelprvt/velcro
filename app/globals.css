@@ -91,6 +91,12 @@ body {
   to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
+/* Help panel fade-in */
+@keyframes velcro-help-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
 /* applied via inline style — just needs the keyframe defined globally */
 .velcro-particle {
   animation-name: velcro-twinkle;

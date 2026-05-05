@@ -166,7 +166,7 @@ export function VelcroOrb({ status, analyserNode, onClick }: VelcroOrbProps) {
             {/* Outer halo — counter-rotates very slowly */}
             <g style={{
               transformOrigin: `${CX}px ${CY}px`,
-              transformBox: "fill-box",
+              transformBox: "view-box",
               animation: "velcro-spin-reverse 90s linear infinite",
               animationPlayState: isActive ? "paused" : "running",
             }}>
@@ -182,7 +182,7 @@ export function VelcroOrb({ status, analyserNode, onClick }: VelcroOrbProps) {
             {/* Main particle ring — slow rotation */}
             <g style={{
               transformOrigin: `${CX}px ${CY}px`,
-              transformBox: "fill-box",
+              transformBox: "view-box",
               animation: "velcro-spin 70s linear infinite",
               animationPlayState: isActive ? "paused" : "running",
             }}>

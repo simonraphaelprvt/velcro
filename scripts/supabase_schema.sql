@@ -98,6 +98,42 @@ create table if not exists google_tokens (
   check (id = 1)
 );
 
+-- ---------------------------------------------------------------------------
+-- debriefs — Phase 3: structured post-call notes
+-- One row per debriefed call/meeting. Contains decisions, todos, mood,
+-- and open threads. Morning brief reads this for unfinished todos.
+-- ---------------------------------------------------------------------------
+
+create table if not exists debriefs (
+  id              uuid primary key default gen_random_uuid(),
+  person          text not null,                 -- person, company, or topic
+  summary         text not null,                 -- 1-3 sentence prose
+  decisions       jsonb not null default '[]',   -- array of strings
+  todos           jsonb not null default '[]',   -- array of {text, done, due?}
+  mood            text,                          -- "good" | "neutral" | "tense" | freeform
+  open_threads    jsonb not null default '[]',   -- array of strings
+  source_event_id text,                          -- optional: linked calendar event
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists debriefs_created_at_idx
+  on debriefs (created_at desc);
+create index if not exists debriefs_person_idx
+  on debriefs (lower(person));
+
+-- ---------------------------------------------------------------------------
+-- spotify_tokens — Phase 4: Spotify OAuth tokens (single row, id=1)
+-- ---------------------------------------------------------------------------
+
+create table if not exists spotify_tokens (
+  id            integer primary key default 1,
+  access_token  text not null,
+  refresh_token text not null,
+  expiry_date   bigint not null,
+  updated_at    timestamptz not null default now(),
+  check (id = 1)
+);
+
 -- =============================================================================
 -- Row Level Security
 -- =============================================================================
@@ -105,6 +141,8 @@ create table if not exists google_tokens (
 alter table vault_chunks enable row level security;
 alter table conversations enable row level security;
 alter table google_tokens enable row level security;
+alter table debriefs enable row level security;
+alter table spotify_tokens enable row level security;
 
 -- No public policies — all access goes through service_role or API routes.
 -- This means: nobody can query these tables directly via the anon key.

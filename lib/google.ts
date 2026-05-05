@@ -3,6 +3,8 @@ import { getServiceSupabase } from "@/lib/supabase";
 import type { CalendarEvent, MailSummary } from "@/lib/types";
 
 const SCOPES = [
+  // events scope includes read AND write — replaces the old readonly scope
+  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/gmail.readonly",
 ];
@@ -115,15 +117,15 @@ export async function getCalendarEvents(
 // Gmail
 // ---------------------------------------------------------------------------
 
-export async function getRecentMails(limit = 10): Promise<MailSummary[]> {
+export async function getRecentMails(limit = 10, query = "in:inbox"): Promise<MailSummary[]> {
   const auth = await getAuthedClient();
   const gmail = google.gmail({ version: "v1", auth });
 
-  // Fetch list of recent messages (unread first, then any)
+  // Fetch list of recent messages matching query
   const listRes = await gmail.users.messages.list({
     userId: "me",
     maxResults: limit,
-    q: "in:inbox",
+    q: query,
   });
 
   const messageIds = listRes.data.messages ?? [];
@@ -157,4 +159,86 @@ export async function getRecentMails(limit = 10): Promise<MailSummary[]> {
   );
 
   return mails;
+}
+
+// ---------------------------------------------------------------------------
+// Calendar — Write
+// ---------------------------------------------------------------------------
+
+export interface CreateEventInput {
+  title:        string;
+  start:        string; // ISO datetime
+  end:          string; // ISO datetime
+  description?: string;
+  location?:    string;
+  attendees?:   string[];
+}
+
+export async function createCalendarEvent(input: CreateEventInput): Promise<CalendarEvent> {
+  const auth = await getAuthedClient();
+  const cal = google.calendar({ version: "v3", auth });
+
+  const res = await cal.events.insert({
+    calendarId: "primary",
+    requestBody: {
+      summary:     input.title,
+      description: input.description,
+      location:    input.location,
+      start:       { dateTime: input.start, timeZone: "Europe/Berlin" },
+      end:         { dateTime: input.end,   timeZone: "Europe/Berlin" },
+      attendees:   input.attendees?.map((email) => ({ email })),
+    },
+  });
+
+  const e = res.data;
+  return {
+    id:    e.id ?? "",
+    title: e.summary ?? input.title,
+    start: e.start?.dateTime ?? input.start,
+    end:   e.end?.dateTime ?? input.end,
+    location:    e.location ?? undefined,
+    description: e.description ?? undefined,
+  };
+}
+
+/**
+ * Search Gmail by free-text query (Gmail search syntax).
+ * Used by Call Prep to find recent threads with a specific person.
+ * Examples: "from:karin@example.com", "Karin Müller", "to:simon Porsche".
+ */
+export async function searchMails(query: string, limit = 8): Promise<MailSummary[]> {
+  return getRecentMails(limit, query);
+}
+
+/**
+ * Search past + upcoming calendar events for a free-text needle (e.g. a name).
+ * Used by Call Prep to surface past meetings with a person.
+ * Window: 6 months back to 1 week forward.
+ */
+export async function searchPastEvents(needle: string, limit = 8): Promise<CalendarEvent[]> {
+  const auth = await getAuthedClient();
+  const cal = google.calendar({ version: "v3", auth });
+
+  const now = Date.now();
+  const sixMonthsAgo = new Date(now - 1000 * 60 * 60 * 24 * 180).toISOString();
+  const oneWeekAhead = new Date(now + 1000 * 60 * 60 * 24 * 7).toISOString();
+
+  const res = await cal.events.list({
+    calendarId: "primary",
+    timeMin: sixMonthsAgo,
+    timeMax: oneWeekAhead,
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: limit,
+    q: needle,
+  });
+
+  return (res.data.items ?? []).map((e) => ({
+    id: e.id ?? "",
+    title: e.summary ?? "(Kein Titel)",
+    start: e.start?.dateTime ?? e.start?.date ?? "",
+    end: e.end?.dateTime ?? e.end?.date ?? "",
+    location: e.location ?? undefined,
+    description: e.description ?? undefined,
+  }));
 }

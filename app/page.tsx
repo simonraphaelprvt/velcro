@@ -5,6 +5,7 @@ import { useVelcro } from "@/hooks/useVelcro";
 import { useWakeWord } from "@/hooks/useWakeWord";
 import { VelcroOrb } from "@/components/VelcroOrb";
 import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
+import { HelpButton } from "@/components/HelpButton";
 import { FEATURES } from "@/lib/config";
 
 const statusLabel: Record<string, string> = {
@@ -83,7 +84,7 @@ export default function Home() {
   }, [status, startListening, stopListening]);
 
   // ── Wake Word ("Hey VELCRO") ──────────────────────────────────────────
-  const { supported: wakeSupported, listening: wakeListening } = useWakeWord({
+  const { supported: wakeSupported, listening: wakeListening, primeFromGesture } = useWakeWord({
     enabled: FEATURES.wakeWord,
     status,
     onWake: () => {
@@ -112,6 +113,8 @@ export default function Home() {
           setTimeout(() => ctx.close().catch(() => {}), 0);
         }
       } catch { /* ignore */ }
+      // Safari: kick off wake word recognition now that we have a user gesture
+      primeFromGesture();
       setPrimed(true);
     };
     window.addEventListener("pointerdown", prime, { once: true, passive: true });
@@ -151,6 +154,9 @@ export default function Home() {
         className="pointer-events-none absolute h-[600px] w-[600px] rounded-full blur-[130px]"
         style={{ background: "radial-gradient(circle, rgba(99,102,241,0.06), transparent 70%)" }}
       />
+
+      {/* Help button — bottom left, capabilities legend */}
+      <HelpButton />
 
       {/* Status dot */}
       <span className={[

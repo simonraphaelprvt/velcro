@@ -41,3 +41,21 @@ export interface MailSummary {
   date: string;
   unread: boolean;
 }
+
+export interface DebriefTodo {
+  text: string;
+  done: boolean;
+  due?: string;
+}
+
+export interface Debrief {
+  id: string;
+  person: string;
+  summary: string;
+  decisions: string[];
+  todos: DebriefTodo[];
+  mood?: string;
+  open_threads: string[];
+  source_event_id?: string;
+  created_at: string;
+}
