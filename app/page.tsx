@@ -26,10 +26,13 @@ function randomIdle(): OrbTransform {
 
 function randomBesideWindow(side: "left" | "right"): OrbTransform {
   const sign = side === "right" ? 1 : -1;
+  // Panel is up to 820px wide → half = 410px from center.
+  // Orb canvas = 380px, at scale ~0.45 that's ~85px half-width.
+  // So orb center needs to be at least 410 + 85 + 20px margin = 515px.
   return {
-    x:     sign * (310 + Math.random() * 70),
-    y:     (Math.random() - 0.5) * 260,
-    scale: 0.48 + Math.random() * 0.22,
+    x:     sign * (490 + Math.random() * 60),
+    y:     (Math.random() - 0.5) * 220,
+    scale: 0.40 + Math.random() * 0.12,
   };
 }
 

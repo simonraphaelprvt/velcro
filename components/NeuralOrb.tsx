@@ -53,8 +53,8 @@ export default function NeuralOrb({
 
       // ── 200 sphere-surface nodes ──────────────────────────────────────
       const NODE_COUNT       = 200;
-      const SPHERE_RADIUS    = 2.0;
-      const CONNECTION_DIST  = 1.2;
+      const SPHERE_RADIUS    = 2.8;
+      const CONNECTION_DIST  = 1.5;
 
       const nodePos  = new Float32Array(NODE_COUNT * 3);
       const nodeVel  = new Float32Array(NODE_COUNT * 3); // drift velocity
@@ -115,7 +115,7 @@ export default function NeuralOrb({
       const floatVel  = new Float32Array(FLOAT_COUNT * 3);
 
       for (let i = 0; i < FLOAT_COUNT; i++) {
-        const r   = 2.3 + rng() * 0.8; // radius 2.3–3.1, fits within z=7 frustum
+        const r   = 3.0 + rng() * 0.7; // radius 3.0–3.7, fits within z=7 FOV60 frustum (±4.04)
         let x: number, y: number, z: number, d: number;
         do {
           x = rng() * 2 - 1;
@@ -249,7 +249,7 @@ export default function NeuralOrb({
           fp[iy] += floatVel[iy];
           fp[iz] += floatVel[iz];
           const dist = Math.sqrt(fp[ix] ** 2 + fp[iy] ** 2 + fp[iz] ** 2);
-          if (dist > 3.2 || dist < 2.1) {
+          if (dist > 3.9 || dist < 2.8) {
             floatVel[ix] *= -1;
             floatVel[iy] *= -1;
             floatVel[iz] *= -1;
