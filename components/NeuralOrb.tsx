@@ -42,7 +42,7 @@ export default function NeuralOrb({
       // ── Scene / Camera ───────────────────────────────────────────────
       const scene  = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-      camera.position.z = 5;
+      camera.position.z = 7;
 
       // ── Helper: seeded pseudo-random (stable across hot-reloads) ─────
       let seed = 42;
@@ -115,7 +115,7 @@ export default function NeuralOrb({
       const floatVel  = new Float32Array(FLOAT_COUNT * 3);
 
       for (let i = 0; i < FLOAT_COUNT; i++) {
-        const r   = 2.5 + rng() * 1.5; // radius 2.5–4.0
+        const r   = 2.3 + rng() * 0.8; // radius 2.3–3.1, fits within z=7 frustum
         let x: number, y: number, z: number, d: number;
         do {
           x = rng() * 2 - 1;
@@ -250,7 +250,7 @@ export default function NeuralOrb({
           fp[iy] += floatVel[iy];
           fp[iz] += floatVel[iz];
           const dist = Math.sqrt(fp[ix] ** 2 + fp[iy] ** 2 + fp[iz] ** 2);
-          if (dist > 4.2 || dist < 2.3) {
+          if (dist > 3.2 || dist < 2.1) {
             floatVel[ix] *= -1;
             floatVel[iy] *= -1;
             floatVel[iz] *= -1;
