@@ -5,57 +5,47 @@ import { WakeWordDetector } from "@/lib/wakeWord";
 import type { VelcroStatus } from "@/hooks/useVelcro";
 
 interface UseWakeWordOptions {
-  /** Master enable switch — feature flag */
-  enabled: boolean;
-  /** Current pipeline status — detector pauses when not idle */
-  status: VelcroStatus;
-  /** Fired when a wake word is detected (only while idle) */
-  onWake: () => void;
+  enabled:  boolean;
+  status:   VelcroStatus;
+  onWake:   () => void;
 }
 
 interface UseWakeWordReturn {
-  /** True if the browser supports SpeechRecognition at all */
-  supported: boolean;
-  /** True while the detector is actively listening for the wake word */
-  listening: boolean;
-  /**
-   * Call this from the first user gesture (click / tap) to kick off
-   * recognition on Safari, where useEffect is not a user gesture.
-   */
+  supported:        boolean;
+  listening:        boolean;
   primeFromGesture: () => void;
 }
 
 /**
- * Manages a single WakeWordDetector instance across the page lifetime.
+ * Manages a single WakeWordDetector across the page lifetime.
  *
- * The detector starts on mount (Chrome/Firefox) or on the first user gesture
- * (Safari — SpeechRecognition.start() requires a user gesture there).
- * It pauses while VELCRO is recording / thinking / speaking, and resumes
- * once status returns to idle. The onWake callback fires only when
- * status === "idle".
+ * Design:
+ *  - Detector is created on mount but NOT started automatically.
+ *  - primeFromGesture() must be called from a real user interaction (click/key).
+ *    This satisfies Chrome's (and Safari's) user-gesture requirement for
+ *    SpeechRecognition.start().
+ *  - While status !== "idle" the detector is paused so VELCRO's own mic
+ *    doesn't clash with wake-word recognition.
+ *  - The WakeWordDetector itself has a watchdog that restarts on failure.
  */
 export function useWakeWord({
   enabled,
   status,
   onWake,
 }: UseWakeWordOptions): UseWakeWordReturn {
-  const detectorRef    = useRef<WakeWordDetector | null>(null);
-  const onWakeRef      = useRef(onWake);
-  const statusRef      = useRef<VelcroStatus>(status);
-  const primedRef      = useRef(false);
-  // Mirror the supported state in a ref so primeFromGesture (which may be
-  // captured as a stale closure in page.tsx's primer effect) can still read
-  // the current value at call-time, not the value from when it was defined.
-  const supportedRef   = useRef(false);
+  const detectorRef  = useRef<WakeWordDetector | null>(null);
+  const onWakeRef    = useRef(onWake);
+  const statusRef    = useRef<VelcroStatus>(status);
+  const primedRef    = useRef(false);
+  const supportedRef = useRef(false);       // avoids stale-closure in primeFromGesture
 
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
 
-  // Keep refs current — avoids re-creating the detector on each render
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
   useEffect(() => { statusRef.current = status; }, [status]);
 
-  // ── Create detector once on mount ────────────────────────────────────
+  // ── Create detector once on mount ───────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
     if (typeof window === "undefined") return;
@@ -69,21 +59,14 @@ export function useWakeWord({
       }
     });
 
-    detectorRef.current = detector;
+    detectorRef.current  = detector;
     supportedRef.current = true;
     setSupported(true);
 
-    // Non-Safari: start immediately from the effect (works fine).
-    // Safari: start() requires a user gesture — we'll start in primeFromGesture().
-    const isSafari = /Safari/.test(navigator.userAgent) &&
-                     !/Chrome/.test(navigator.userAgent) &&
-                     !/CriOS/.test(navigator.userAgent);
-
-    if (!isSafari) {
-      detector.start();
-      setListening(true);
-    }
-    // On Safari the indicator stays dark until the first touch primes it.
+    // ⚠️  DO NOT call detector.start() here.
+    //     SpeechRecognition.start() silently fails (or throws) on Chrome and
+    //     Safari if called outside a user gesture. The primer in page.tsx will
+    //     call primeFromGesture() on the first click/tap/keypress.
 
     return () => {
       detector.stop();
@@ -92,38 +75,38 @@ export function useWakeWord({
     };
   }, [enabled]);
 
-  // ── Pause / resume detector around active states ─────────────────────
+  // ── Pause / resume around active states ────────────────────────────────
   useEffect(() => {
     const detector = detectorRef.current;
     if (!detector || !supported) return;
 
     if (status === "idle") {
-      detector.resume();
-      setListening(true);
+      if (primedRef.current) {
+        // Only resume if we've already been started via a user gesture
+        detector.resume();
+        setListening(true);
+      }
     } else {
       detector.pause();
       setListening(false);
     }
   }, [status, supported]);
 
-  // ── primeFromGesture — call from first user touch ─────────────────────
-  // IMPORTANT: this function is captured as a closure in page.tsx's primer
-  // effect and may be stale. We deliberately use refs (not state) here so
-  // the call always reads current values regardless of when it was captured.
+  // ── primeFromGesture ────────────────────────────────────────────────────
+  // Called once from page.tsx on first pointerdown / keydown.
+  // Uses refs so the captured closure in page.tsx's primer is never stale.
   const primeFromGesture = () => {
     if (primedRef.current) return;
     primedRef.current = true;
 
     const detector = detectorRef.current;
-    // Use supportedRef (not the `supported` state variable) — the state may
-    // be stale in the closure captured by page.tsx's primer event listener.
     if (!detector || !supportedRef.current) return;
 
-    // Only needed on Safari — detector.start() is a no-op if already running
     if (statusRef.current === "idle") {
       detector.start();
       setListening(true);
     }
+    // If not idle right now, the status → idle transition above will call resume()
   };
 
   return { supported, listening, primeFromGesture };
