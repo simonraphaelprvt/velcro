@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         text,
         model_id: "eleven_multilingual_v2",
-        language_code: "de",   // force German pronunciation — "Simon" klingt deutsch
+        // Note: language_code is NOT sent — it causes 422 on many voice models.
+        // eleven_multilingual_v2 auto-detects German from the text content.
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,

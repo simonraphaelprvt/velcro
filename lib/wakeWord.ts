@@ -142,10 +142,27 @@ export class WakeWordDetector {
 
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
-        const transcript = result[0]?.transcript?.toLowerCase() ?? "";
-        if (!transcript) continue;
 
-        if (WAKE_PHRASES.some((p) => transcript.includes(p))) {
+        // Collect all alternatives, not just [0]
+        const transcripts: string[] = [];
+        for (let a = 0; a < result.length; a++) {
+          const t = result[a]?.transcript?.toLowerCase();
+          if (t) transcripts.push(t);
+        }
+        if (!transcripts.length) continue;
+
+        const matched = transcripts.some(
+          (t) =>
+            // Exact phrase variants
+            WAKE_PHRASES.some((p) => t.includes(p)) ||
+            // Regex: any word resembling "velcro" in any accent/spelling
+            /vel[ck]r/i.test(t) ||
+            /welcr/i.test(t)   ||
+            /belcr/i.test(t)   ||
+            /felcr/i.test(t)
+        );
+
+        if (matched) {
           const now = Date.now();
           if (now - this.lastFireAt > this.cooldownMs) {
             this.lastFireAt = now;
@@ -172,9 +189,19 @@ export class WakeWordDetector {
       if (!this.active || this.paused) return;
 
       if (this.isSafari) {
-        // Safari: can't restart from setTimeout — attach a one-shot pointer
-        // listener so the NEXT user touch restarts recognition.
-        this.waitForGestureToRestart();
+        // Safari: restart via short timer first — often works if the session
+        // ended due to silence (not a cold start). If it throws (no gesture),
+        // fall back to waiting for the next pointer event.
+        setTimeout(() => {
+          if (this.active && !this.paused && !this.running) {
+            try {
+              this.recognition!.start();
+            } catch {
+              // Gesture required — wait for next touch
+              this.waitForGestureToRestart();
+            }
+          }
+        }, 300);
       } else {
         // Non-Safari: safe to restart from setTimeout
         setTimeout(() => this.tryStart(), 300);

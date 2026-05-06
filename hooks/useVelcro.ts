@@ -114,7 +114,9 @@ export function useVelcro(): UseVelcroReturn {
       });
 
       if (!res.ok) {
-        console.error("Speak API error:", res.status, await res.text().catch(() => ""));
+        const errBody = await res.text().catch(() => "");
+        console.error("Speak API error:", res.status, errBody);
+        // Fall through to finally → status resets to idle
         return;
       }
 
