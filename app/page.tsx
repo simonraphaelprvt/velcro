@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useVelcro } from "@/hooks/useVelcro";
 import { useWakeWord } from "@/hooks/useWakeWord";
-import { VelcroOrb } from "@/components/VelcroOrb";
+import NeuralOrb from "@/components/NeuralOrb";
 import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
 import { HelpButton } from "@/components/HelpButton";
 import { FEATURES } from "@/lib/config";
@@ -196,7 +196,7 @@ export default function Home() {
         }}
       >
         <div className="flex flex-col items-center gap-12">
-          <VelcroOrb
+          <NeuralOrb
             status={status}
             analyserNode={analyserNode}
             onClick={toggleListening}
