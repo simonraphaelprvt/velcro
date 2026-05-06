@@ -41,7 +41,7 @@ export default function NeuralOrb({
 
       // ── Scene / Camera ───────────────────────────────────────────────
       const scene  = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+      const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
       camera.position.z = 7;
 
       // ── Helper: seeded pseudo-random (stable across hot-reloads) ─────
@@ -153,17 +153,16 @@ export default function NeuralOrb({
       scene.add(group);
 
       // ── Responsive resize ─────────────────────────────────────────────
+      // Use the canvas's own CSS size — don't trust the parent's clientHeight
+      // which can be stale or include non-canvas children.
+      const CANVAS_SIZE = 380;
       const resize = () => {
-        if (!canvas.parentElement) return;
-        const w = canvas.parentElement.clientWidth  || canvas.clientWidth  || 300;
-        const h = canvas.parentElement.clientHeight || canvas.clientHeight || 300;
-        renderer.setSize(w, h, false);
-        camera.aspect = w / h;
+        renderer.setSize(CANVAS_SIZE, CANVAS_SIZE, false);
+        camera.aspect = 1;
         camera.updateProjectionMatrix();
       };
       resize();
-      const ro = new ResizeObserver(resize);
-      if (canvas.parentElement) ro.observe(canvas.parentElement);
+      // No ResizeObserver needed — canvas is always square at CANVAS_SIZE
 
       // ── Audio analyser data ────────────────────────────────────────────
       const audioData = new Uint8Array(32);
@@ -312,8 +311,8 @@ export default function NeuralOrb({
       <div
         className="pointer-events-none absolute rounded-full transition-all duration-700"
         style={{
-          width: "260px",
-          height: "260px",
+          width: "340px",
+          height: "340px",
           background:
             isRecording
               ? "radial-gradient(circle, rgba(139,92,246,0.55) 0%, transparent 65%)"
@@ -326,10 +325,10 @@ export default function NeuralOrb({
         }}
       />
 
-      {/* Three.js canvas */}
+      {/* Three.js canvas — 380×380 so sphere never clips at edges */}
       <canvas
         ref={canvasRef}
-        style={{ width: "300px", height: "300px", display: "block" }}
+        style={{ width: "380px", height: "380px", display: "block" }}
       />
 
       {/* VELCRO wordmark overlay */}
