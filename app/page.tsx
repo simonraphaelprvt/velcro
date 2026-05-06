@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { useVelcro } from "@/hooks/useVelcro";
+import { useVelcro, type VelcroCommand } from "@/hooks/useVelcro";
 import { useWakeWord } from "@/hooks/useWakeWord";
 import NeuralOrb from "@/components/NeuralOrb";
 import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
@@ -18,30 +18,52 @@ const statusLabel: Record<string, string> = {
 
 interface OrbTransform { x: number; y: number; scale: number }
 
+// NeuralOrb canvas is now 500×500px. Scale factor vs old 380px = 0.76.
+// Idle scale range keeps same CSS pixel size: old 0.88–1.14 × 0.76 = 0.67–0.87
 function randomIdle(): OrbTransform {
   const angle = Math.random() * Math.PI * 2;
   const dist  = 20 + Math.random() * 65;
-  return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, scale: 0.88 + Math.random() * 0.26 };
+  return { x: Math.cos(angle) * dist, y: Math.sin(angle) * dist, scale: 0.67 + Math.random() * 0.20 };
 }
 
+// Beside-window scale: old 0.40–0.52 × 0.76 = 0.30–0.40
+// x is clamped to viewport so the orb never clips on iPad.
 function randomBesideWindow(side: "left" | "right"): OrbTransform {
-  const sign = side === "right" ? 1 : -1;
-  // Panel is up to 820px wide → half = 410px from center.
-  // Orb canvas = 380px, at scale ~0.45 that's ~85px half-width.
-  // So orb center needs to be at least 410 + 85 + 20px margin = 515px.
+  const sign  = side === "right" ? 1 : -1;
+  const scale = 0.30 + Math.random() * 0.10;
+  // Orb CSS half-width at this scale (canvas 500px)
+  const orbHalf = (500 * scale) / 2;
+  // Safe x: just outside the panel (panel half ≈ 410px) but inside the screen
+  const vw     = typeof window !== "undefined" ? window.innerWidth : 1440;
+  const maxX   = vw / 2 - orbHalf - 20;   // 20px gap from screen edge
+  const targetX = 400 + Math.random() * 50; // aim just outside 820px panel
   return {
-    x:     sign * (490 + Math.random() * 60),
-    y:     (Math.random() - 0.5) * 220,
-    scale: 0.40 + Math.random() * 0.12,
+    x:     sign * Math.min(targetX, maxX),
+    y:     (Math.random() - 0.5) * 200,
+    scale,
   };
 }
 
 export default function Home() {
-  const { messages, status, startListening, stopListening, analyserNode } = useVelcro();
-  const spaceActiveRef = useRef(false);
-
+  const spaceActiveRef      = useRef(false);
   const [dismissedId, setDismissedId] = useState<string | null>(null);
+
+  // Stable ref so onCommand can read the current assistant message without stale closures
+  const latestAssistantRef = useRef<{ id?: string } | undefined>(undefined);
+
+  const handleCommand = useCallback((cmd: VelcroCommand) => {
+    if (cmd === "close-window") {
+      setDismissedId(latestAssistantRef.current?.id ?? null);
+    }
+  }, []);
+
+  const { messages, status, startListening, stopListening, analyserNode } = useVelcro({
+    onCommand: handleCommand,
+  });
+
   const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  // Keep ref current
+  useEffect(() => { latestAssistantRef.current = latestAssistant; }, [latestAssistant]);
   const latestUser      = [...messages].reverse().find((m) => m.role === "user");
 
   // Show window while speaking AND while idle — so orb is beside it as VELCRO explains

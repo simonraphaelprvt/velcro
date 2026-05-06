@@ -86,11 +86,11 @@ export default function NeuralOrb({
       const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setClearColor(0x000000, 0);
-      renderer.setSize(380, 380, false);
+      renderer.setSize(500, 500, false);
 
       const scene  = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
-      camera.position.z = 7;
+      camera.position.z = 9.21; // 7 × (500/380) — same px/world-unit, frustum half ≥ 5.3 units
 
       // ── Noise functions ────────────────────────────────────────────────
       const noisePos  = makeNoise2D(42);   // group position drift
@@ -493,7 +493,7 @@ export default function NeuralOrb({
       {/* Three.js canvas */}
       <canvas
         ref={canvasRef}
-        style={{ width: "380px", height: "380px", display: "block" }}
+        style={{ width: "500px", height: "500px", display: "block" }}
       />
 
       {/* VELCRO wordmark */}

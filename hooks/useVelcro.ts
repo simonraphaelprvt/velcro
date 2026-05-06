@@ -65,6 +65,12 @@ function extractSpokenText(text: string): string {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type VelcroStatus = "idle" | "recording" | "transcribing" | "thinking" | "speaking";
+export type VelcroCommand = "close-window";
+
+interface UseVelcroOptions {
+  /** Called when the user speaks a known command (before sending to Claude). */
+  onCommand?: (cmd: VelcroCommand) => void;
+}
 
 interface UseVelcroReturn {
   messages:       Message[];
@@ -78,9 +84,21 @@ function makeId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// Patterns that close the content window — no Claude call needed.
+const CLOSE_WINDOW_RE =
+  /\b(kontextfenster|panel|fenster)\s*(schlie[ßs]|zu\b|weg\b|ausblend)/i;
+const CLOSE_WINDOW_RE2 =
+  /(schlie[ßs]|close)\s*(das\s*)?(kontextfenster|fenster|panel)/i;
+
+function isCloseWindowCommand(text: string): boolean {
+  return CLOSE_WINDOW_RE.test(text) || CLOSE_WINDOW_RE2.test(text);
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
-export function useVelcro(): UseVelcroReturn {
+export function useVelcro({ onCommand }: UseVelcroOptions = {}): UseVelcroReturn {
+  const onCommandRef = useRef(onCommand);
+  useEffect(() => { onCommandRef.current = onCommand; }, [onCommand]);
   const [messages,     setMessages]     = useState<Message[]>([]);
   const [status,       setStatus]       = useState<VelcroStatus>("idle");
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
@@ -174,6 +192,13 @@ export function useVelcro(): UseVelcroReturn {
       }
 
       if (!query) { setStatus("idle"); return; }
+
+      // ── Command intercept — handle before Claude ──────────────────────
+      if (isCloseWindowCommand(query)) {
+        onCommandRef.current?.("close-window");
+        setStatus("idle");
+        return;
+      }
 
       const userMessageId = addMessage("user", query);
 
