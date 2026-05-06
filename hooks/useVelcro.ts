@@ -1,8 +1,20 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRecorder } from "./useRecorder";
 import type { Message } from "@/lib/types";
+
+// ─── Silence-detection thresholds ───────────────────────────────────────────
+/** RMS above this level counts as speech (float32, range 0–1). */
+const SPEECH_RMS_THRESHOLD   = 0.02;
+/** After speech detected: ms of silence before auto-stop. */
+const POST_SPEECH_SILENCE_MS = 2200;
+/** If user never speaks: ms before cancelling the recording. */
+const NO_SPEECH_TIMEOUT_MS   = 8000;
+/** Hard limit — always stop after this many ms regardless. */
+const MAX_RECORDING_MS       = 45_000;
+
+// ─── Text helpers ────────────────────────────────────────────────────────────
 
 function stripInlineMarkdown(text: string): string {
   return text
@@ -21,9 +33,6 @@ function stripInlineMarkdown(text: string): string {
     .trim();
 }
 
-// Normalise text for TTS — replace English words ElevenLabs mispronounces in German context.
-// Keep only semantic replacements (real German words). Phonetic hacks like "Köhl" or "Miiting"
-// confuse ElevenLabs and produce silence or garbled output — removed.
 function normalizeForSpeech(text: string): string {
   return text
     .replace(/\bTodos\b/g, "Aufgaben")
@@ -31,9 +40,6 @@ function normalizeForSpeech(text: string): string {
     .replace(/\bOKs?\b/g,  "okay");
 }
 
-// Extract the spoken portion of a response — the prose BEFORE any structured block.
-// Cuts at: tables (|), code blocks (```), numbered lists (1. ), or ## headings.
-// If Claude put no intro, returns a short fallback so VELCRO always speaks.
 function extractSpokenText(text: string): string {
   const tableStart   = text.search(/^\|/m);
   const codeStart    = text.indexOf("```");
@@ -51,39 +57,46 @@ function extractSpokenText(text: string): string {
   const before = normalizeForSpeech(stripInlineMarkdown(text.slice(0, cutAt)));
   if (before.length > 4) return before;
 
-  // Fallback: Claude skipped the intro — speak the first 2 sentences only
-  // to avoid reading the entire structured block aloud.
-  const full = normalizeForSpeech(stripInlineMarkdown(text));
+  const full      = normalizeForSpeech(stripInlineMarkdown(text));
   const sentences = full.match(/[^.!?]+[.!?]+/g) ?? [];
   return sentences.slice(0, 2).join(" ").trim() || "Hier ist die Übersicht für Sie.";
 }
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 export type VelcroStatus = "idle" | "recording" | "transcribing" | "thinking" | "speaking";
 
 interface UseVelcroReturn {
-  messages: Message[];
-  status: VelcroStatus;
+  messages:       Message[];
+  status:         VelcroStatus;
   startListening: () => Promise<void>;
-  stopListening: () => Promise<void>;
-  // AnalyserNode for real-time orb visualisation (null when not speaking)
-  analyserNode: AnalyserNode | null;
+  stopListening:  () => Promise<void>;
+  analyserNode:   AnalyserNode | null;
 }
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// ─── Hook ────────────────────────────────────────────────────────────────────
+
 export function useVelcro(): UseVelcroReturn {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [status, setStatus] = useState<VelcroStatus>("idle");
+  const [messages,     setMessages]     = useState<Message[]>([]);
+  const [status,       setStatus]       = useState<VelcroStatus>("idle");
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
 
-  // AudioContext created once during a user gesture so Safari allows playback
-  const audioCtxRef  = useRef<AudioContext | null>(null);
-  const analyserRef  = useRef<AnalyserNode | null>(null);
-  const hasGreetedRef = useRef(false);
+  const audioCtxRef      = useRef<AudioContext | null>(null);
+  const analyserRef      = useRef<AnalyserNode | null>(null);
+  // Separate analyser connected to the mic input — used for silence detection.
+  const micAnalyserRef   = useRef<AnalyserNode | null>(null);
+  const micSourceRef     = useRef<MediaStreamAudioSourceNode | null>(null);
+  const hasGreetedRef    = useRef(false);
 
   const recorder = useRecorder();
+
+  // Keep a stable ref to stopListening so the silence-detection interval
+  // can call it without being in its dependency array (avoids stale closure).
+  const stopListeningRef = useRef<() => Promise<void>>(async () => {});
 
   const addMessage = useCallback((role: Message["role"], content: string): string => {
     const id = makeId();
@@ -95,13 +108,11 @@ export function useVelcro(): UseVelcroReturn {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content } : m)));
   }, []);
 
+  // ── TTS ──────────────────────────────────────────────────────────────────
   const speak = useCallback(async (text: string) => {
     setStatus("speaking");
     try {
-      // Extract spoken prose — text before tables/code, never empty
       const spoken = extractSpokenText(text);
-
-      // Prepend greeting to the very first thing VELCRO says
       const cleanText = !hasGreetedRef.current
         ? `Hallo, Simon. ${spoken}`
         : spoken;
@@ -114,35 +125,21 @@ export function useVelcro(): UseVelcroReturn {
       });
 
       if (!res.ok) {
-        const errBody = await res.text().catch(() => "");
-        console.error("Speak API error:", res.status, errBody);
-        // Fall through to finally → status resets to idle
+        console.error("Speak API error:", res.status, await res.text().catch(() => ""));
         return;
       }
 
-      // Decode via AudioContext so Safari autoplay policy can't block us.
-      // The AudioContext was created + resumed during the user gesture in startListening.
       const ctx = audioCtxRef.current;
-      if (!ctx) {
-        console.error("No AudioContext — was startListening called first?");
-        return;
-      }
+      if (!ctx) { console.error("No AudioContext"); return; }
+      if (ctx.state === "suspended") await ctx.resume();
 
-      if (ctx.state === "suspended") {
-        await ctx.resume();
-      }
+      const audioBuffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      const source      = ctx.createBufferSource();
+      source.buffer     = audioBuffer;
 
-      const arrayBuffer = await res.arrayBuffer();
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-
-      // Wire through the analyser for orb visualisation
       const analyser = analyserRef.current!;
       source.connect(analyser);
       analyser.connect(ctx.destination);
-
       setAnalyserNode(analyser);
 
       await new Promise<void>((resolve) => {
@@ -158,9 +155,9 @@ export function useVelcro(): UseVelcroReturn {
     }
   }, []);
 
+  // ── Pipeline ─────────────────────────────────────────────────────────────
   const runPipeline = useCallback(
     async (audioBlob: Blob) => {
-      // 1. Transcribe
       setStatus("transcribing");
       let query = "";
       try {
@@ -176,14 +173,10 @@ export function useVelcro(): UseVelcroReturn {
         return;
       }
 
-      if (!query) {
-        setStatus("idle");
-        return;
-      }
+      if (!query) { setStatus("idle"); return; }
 
       const userMessageId = addMessage("user", query);
 
-      // 2. Stream Claude response
       setStatus("thinking");
       const assistantId = makeId();
       setMessages((prev) => [
@@ -205,9 +198,9 @@ export function useVelcro(): UseVelcroReturn {
 
         if (!res.ok || !res.body) throw new Error("Chat failed");
 
-        const reader = res.body.getReader();
+        const reader  = res.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = "";
+        let buffer    = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -215,7 +208,7 @@ export function useVelcro(): UseVelcroReturn {
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
+          buffer      = lines.pop() ?? "";
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
@@ -227,9 +220,7 @@ export function useVelcro(): UseVelcroReturn {
                 fullResponse += event.text;
                 updateMessage(assistantId, fullResponse);
               }
-            } catch {
-              // malformed SSE line
-            }
+            } catch { /* malformed SSE */ }
           }
         }
       } catch (err) {
@@ -239,20 +230,15 @@ export function useVelcro(): UseVelcroReturn {
         return;
       }
 
-      // 3. Speak the response
-      if (fullResponse) {
-        await speak(fullResponse);
-      } else {
-        setStatus("idle");
-      }
+      if (fullResponse) await speak(fullResponse);
+      else               setStatus("idle");
 
       void userMessageId;
     },
     [messages, addMessage, updateMessage, speak]
   );
 
-  // Soft "wake" chirp — a tiny rising sine pulse via WebAudio.
-  // Synthesized live so we don't ship an audio file.
+  // ── Wake chirp ────────────────────────────────────────────────────────────
   const playWakeChirp = useCallback(() => {
     const ctx = audioCtxRef.current;
     if (!ctx || ctx.state !== "running") return;
@@ -273,23 +259,22 @@ export function useVelcro(): UseVelcroReturn {
     } catch { /* ignore */ }
   }, []);
 
+  // ── Start ─────────────────────────────────────────────────────────────────
   const startListening = useCallback(async () => {
     if (status !== "idle") return;
 
-    // ── STEP 1: mic access ── Must happen first, before any await that could
-    // break the iOS Safari gesture chain. getUserMedia is inside recorder.start().
+    // STEP 1 — mic access (must be first, before any await, for iOS gesture chain)
     try {
       await recorder.start();
     } catch (err) {
       console.error("[VELCRO] mic access failed:", err);
-      // Show a brief visual hint (status flash) then reset
       setStatus("idle");
       return;
     }
 
-    // ── STEP 2: AudioContext (needs user gesture but can follow getUserMedia) ──
+    // STEP 2 — AudioContext (follows getUserMedia within the same gesture)
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-      const ctx     = new AudioContext();
+      const ctx      = new AudioContext();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       audioCtxRef.current = ctx;
@@ -297,20 +282,86 @@ export function useVelcro(): UseVelcroReturn {
     }
     await audioCtxRef.current.resume();
 
-    // ── STEP 3: acoustic feedback + status ──
+    // STEP 3 — connect mic stream to a separate analyser for silence detection
+    const stream = recorder.getStream();
+    if (stream && audioCtxRef.current) {
+      try {
+        const micSrc    = audioCtxRef.current.createMediaStreamSource(stream);
+        const micAna    = audioCtxRef.current.createAnalyser();
+        micAna.fftSize  = 512;
+        micSrc.connect(micAna);
+        micSourceRef.current  = micSrc;
+        micAnalyserRef.current = micAna;
+      } catch (err) {
+        console.warn("[VELCRO] mic analyser setup failed:", err);
+      }
+    }
+
     playWakeChirp();
     setStatus("recording");
   }, [status, recorder, playWakeChirp]);
 
+  // ── Stop ──────────────────────────────────────────────────────────────────
   const stopListening = useCallback(async () => {
     if (status !== "recording") return;
+
+    // Tear down silence-detection audio graph
+    try { micSourceRef.current?.disconnect(); } catch { /* ignore */ }
+    micSourceRef.current   = null;
+    micAnalyserRef.current = null;
+
     const blob = await recorder.stop();
-    if (blob) {
-      await runPipeline(blob);
-    } else {
-      setStatus("idle");
-    }
+    if (blob) await runPipeline(blob);
+    else      setStatus("idle");
   }, [status, recorder, runPipeline]);
+
+  // Keep ref current so silence-detection interval can call it safely
+  useEffect(() => { stopListeningRef.current = stopListening; }, [stopListening]);
+
+  // ── Silence detection ─────────────────────────────────────────────────────
+  // Runs while status === "recording". Auto-stops when:
+  //   • speech was detected and then silence for POST_SPEECH_SILENCE_MS
+  //   • no speech at all for NO_SPEECH_TIMEOUT_MS
+  //   • total recording exceeds MAX_RECORDING_MS
+  useEffect(() => {
+    if (status !== "recording") return;
+
+    const startedAt  = Date.now();
+    let lastSpeechAt = Date.now();
+    let hasSpoken    = false;
+
+    const id = setInterval(() => {
+      const analyser = micAnalyserRef.current;
+      if (!analyser) return;
+
+      const buf = new Float32Array(analyser.frequencyBinCount);
+      analyser.getFloatTimeDomainData(buf);
+      const rms = Math.sqrt(buf.reduce((s, v) => s + v * v, 0) / buf.length);
+
+      const now = Date.now();
+
+      if (rms > SPEECH_RMS_THRESHOLD) {
+        hasSpoken    = true;
+        lastSpeechAt = now;
+      }
+
+      const silenceDuration = now - lastSpeechAt;
+      const totalDuration   = now - startedAt;
+
+      const shouldStop =
+        (hasSpoken  && silenceDuration >= POST_SPEECH_SILENCE_MS) ||
+        (!hasSpoken && totalDuration   >= NO_SPEECH_TIMEOUT_MS)   ||
+        totalDuration >= MAX_RECORDING_MS;
+
+      if (shouldStop) {
+        clearInterval(id);
+        console.log("[VELCRO] auto-stop — spoken:", hasSpoken, "silence:", silenceDuration, "ms");
+        stopListeningRef.current();
+      }
+    }, 150);
+
+    return () => clearInterval(id);
+  }, [status]); // intentionally excludes stopListening — using ref instead
 
   return { messages, status, startListening, stopListening, analyserNode };
 }

@@ -5,9 +5,10 @@ import { useRef, useState, useCallback } from "react";
 type RecorderState = "idle" | "recording";
 
 interface UseRecorderReturn {
-  state:  RecorderState;
-  start:  () => Promise<void>;
-  stop:   () => Promise<Blob | null>;
+  state:     RecorderState;
+  start:     () => Promise<void>;
+  stop:      () => Promise<Blob | null>;
+  getStream: () => MediaStream | null;
 }
 
 function getSupportedMimeType(): string {
@@ -121,5 +122,8 @@ export function useRecorder(): UseRecorderReturn {
     });
   }, []);
 
-  return { state, start, stop };
+  /** Returns the active MediaStream (null before start() is called). */
+  const getStream = useCallback(() => streamRef.current, []);
+
+  return { state, start, stop, getStream };
 }
