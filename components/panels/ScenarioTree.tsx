@@ -42,7 +42,7 @@ function BranchNode({ branch, depth, index, totalSiblings }: {
       {depth > 0 && (
         <motion.div
           className="w-px"
-          style={{ background: "rgba(255,255,255,0.12)", height: 24 }}
+          style={{ background: "rgba(255,255,255,0.12)", height: 14 }}
           initial={{ scaleY: 0, originY: 0 }}
           animate={{ scaleY: 1 }}
           transition={{ duration: 0.3, delay: delay - 0.05 }}
@@ -51,7 +51,7 @@ function BranchNode({ branch, depth, index, totalSiblings }: {
 
       {/* Node card */}
       <div
-        className="w-full rounded-xl px-3.5 py-3"
+        className="w-full rounded-xl px-3 py-2"
         style={{
           background: style.bg,
           border: `1px solid ${style.border}`,
@@ -59,7 +59,7 @@ function BranchNode({ branch, depth, index, totalSiblings }: {
         }}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="text-sm font-medium leading-snug" style={{ color: "#e8e8f0" }}>
+          <span className="text-xs font-medium leading-snug" style={{ color: "#e8e8f0" }}>
             {branch.condition}
           </span>
           {branch.probability != null && (
@@ -88,7 +88,7 @@ function BranchNode({ branch, depth, index, totalSiblings }: {
         <>
           <motion.div
             className="w-px"
-            style={{ background: "rgba(255,255,255,0.12)", height: 20 }}
+            style={{ background: "rgba(255,255,255,0.12)", height: 10 }}
             initial={{ scaleY: 0, originY: 0 }}
             animate={{ scaleY: 1 }}
             transition={{ duration: 0.3, delay: delay + 0.1 }}
@@ -116,7 +116,7 @@ function BranchNode({ branch, depth, index, totalSiblings }: {
 
 export default function ScenarioTree({ data }: { data: STData }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}

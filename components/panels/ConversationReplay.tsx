@@ -26,7 +26,7 @@ export default function ConversationReplay({ data }: { data: CRData }) {
   const openItems = data.items.filter((i) => i.type === "open" || i.type === "problem");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -54,7 +54,7 @@ export default function ConversationReplay({ data }: { data: CRData }) {
           style={{ top: 0, bottom: 0, background: "rgba(255,255,255,0.08)" }}
         />
 
-        <div className="space-y-3 pl-7">
+        <div className="space-y-2 pl-7">
           {data.items.map((item, i) => {
             const cfg = item.type ? TYPE_CONFIG[item.type] : DEFAULT_TYPE;
             const Icon = cfg.icon;
@@ -75,7 +75,7 @@ export default function ConversationReplay({ data }: { data: CRData }) {
                 </div>
 
                 <div
-                  className="rounded-xl p-3"
+                  className="rounded-xl p-2"
                   style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -87,7 +87,7 @@ export default function ConversationReplay({ data }: { data: CRData }) {
                     </span>
                     <span className="text-[10px]" style={{ color: "#6b6b8a" }}>{item.date}</span>
                   </div>
-                  <div className="text-sm leading-snug" style={{ color: "#c8c8e0" }}>{item.topic}</div>
+                  <div className="text-xs leading-snug" style={{ color: "#c8c8e0" }}>{item.topic}</div>
                   {item.tools && item.tools.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {item.tools.map((t, ti) => (
@@ -114,7 +114,7 @@ export default function ConversationReplay({ data }: { data: CRData }) {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 + data.items.length * 0.09 + 0.15 }}
-          className="rounded-xl p-4"
+          className="rounded-xl p-3"
           style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.2)" }}
         >
           <div className="mb-2.5 flex items-center gap-2">

@@ -30,7 +30,7 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
       }}
     >
       <div
-        className="relative max-h-[78vh] overflow-y-auto rounded-2xl p-6"
+        className="relative overflow-hidden rounded-2xl p-4"
         style={{
           background:    "rgba(10,10,16,0.97)",
           border:        "1px solid rgba(255,255,255,0.08)",
@@ -113,8 +113,8 @@ export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
           )}
         </div>
 
-        <p className="mt-5 text-center text-[9px] tracking-widest" style={{ color: "rgba(107,107,138,0.4)" }}>
-          ESC
+        <p className="mt-3 text-center text-[9px] tracking-widest" style={{ color: "rgba(107,107,138,0.3)" }}>
+          ESC · „Kontextfenster schließen"
         </p>
       </div>
     </div>

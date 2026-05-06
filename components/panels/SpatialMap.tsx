@@ -27,7 +27,7 @@ function locColor(loc: SMLoc) {
 
 export default function SpatialMap({ data }: { data: SMData }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -71,7 +71,7 @@ export default function SpatialMap({ data }: { data: SMData }) {
                 hidden: { opacity: 0, x: -14 },
                 show:   { opacity: 1, x: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } },
               }}
-              className="flex items-start gap-3 rounded-xl p-3"
+              className="flex items-start gap-3 rounded-xl p-2"
               style={{
                 background: `${color}0a`,
                 border: `1px solid ${color}25`,
@@ -79,7 +79,7 @@ export default function SpatialMap({ data }: { data: SMData }) {
             >
               {/* Pin icon */}
               <div
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
                 style={{ background: `${color}18`, border: `1px solid ${color}35` }}
               >
                 <MapPin size={13} style={{ color }} />

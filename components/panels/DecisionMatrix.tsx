@@ -63,7 +63,7 @@ export default function DecisionMatrix({ data }: { data: DMData }) {
 
   return (
     <motion.div
-      className="space-y-6"
+      className="space-y-4"
       variants={STAGGER}
       initial="hidden"
       animate="show"
@@ -83,7 +83,7 @@ export default function DecisionMatrix({ data }: { data: DMData }) {
           return (
             <div
               key={i}
-              className="relative rounded-xl p-4"
+              className="relative rounded-xl p-3"
               style={{
                 background: isWinner
                   ? `linear-gradient(135deg, ${color}18, ${color}08)`
@@ -104,7 +104,7 @@ export default function DecisionMatrix({ data }: { data: DMData }) {
               <div className="text-xs font-medium mb-3 truncate" style={{ color: isWinner ? color : "#9494b0" }}>
                 {opt}
               </div>
-              <div className="text-3xl font-bold tabular-nums" style={{ color: isWinner ? color : "#e8e8f0" }}>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: isWinner ? color : "#e8e8f0" }}>
                 <Counter target={totals[i]} />
               </div>
               <div className="mt-2">
@@ -119,7 +119,7 @@ export default function DecisionMatrix({ data }: { data: DMData }) {
       <motion.div variants={SLIDE} className="space-y-1">
         <div className="mb-3 text-[10px] uppercase tracking-[0.25em]" style={{ color: "#6b6b8a" }}>Faktoren</div>
         {data.factors.map((f, fi) => (
-          <div key={fi} className="rounded-lg px-3 py-2.5" style={{ background: "rgba(255,255,255,0.03)" }}>
+          <div key={fi} className="rounded-lg px-2.5 py-1.5" style={{ background: "rgba(255,255,255,0.03)" }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs" style={{ color: "#c8c8e0" }}>{f.name}</span>
               <span
@@ -156,7 +156,7 @@ export default function DecisionMatrix({ data }: { data: DMData }) {
       {/* Verdict */}
       <motion.div
         variants={SLIDE}
-        className="flex items-center gap-3 rounded-xl p-4"
+        className="flex items-center gap-3 rounded-xl p-3"
         style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)" }}
       >
         <CheckCircle size={18} style={{ color: "#34d399", flexShrink: 0 }} />

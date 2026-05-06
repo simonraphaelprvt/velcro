@@ -67,7 +67,7 @@ export default function MoodBoard({ data }: { data: MBData }) {
   const notedDays = data.days.filter((d) => d.note);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -107,7 +107,7 @@ export default function MoodBoard({ data }: { data: MBData }) {
             >
               <div className="text-[9px]" style={{ color: "#6b6b8a" }}>{day.date}</div>
               <div
-                className="flex h-10 w-full items-center justify-center rounded-lg text-base"
+                className="flex h-8 w-full items-center justify-center rounded-lg text-sm"
                 style={{
                   background: `${m.color}18`,
                   border: `1px solid ${m.color}40`,
