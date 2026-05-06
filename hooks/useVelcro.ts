@@ -276,9 +276,20 @@ export function useVelcro(): UseVelcroReturn {
   const startListening = useCallback(async () => {
     if (status !== "idle") return;
 
-    // Create (or reopen) AudioContext during user gesture — required by Safari
+    // ── STEP 1: mic access ── Must happen first, before any await that could
+    // break the iOS Safari gesture chain. getUserMedia is inside recorder.start().
+    try {
+      await recorder.start();
+    } catch (err) {
+      console.error("[VELCRO] mic access failed:", err);
+      // Show a brief visual hint (status flash) then reset
+      setStatus("idle");
+      return;
+    }
+
+    // ── STEP 2: AudioContext (needs user gesture but can follow getUserMedia) ──
     if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
-      const ctx = new AudioContext();
+      const ctx     = new AudioContext();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       audioCtxRef.current = ctx;
@@ -286,10 +297,8 @@ export function useVelcro(): UseVelcroReturn {
     }
     await audioCtxRef.current.resume();
 
-    // Acoustic feedback so user knows VELCRO is listening
+    // ── STEP 3: acoustic feedback + status ──
     playWakeChirp();
-
-    await recorder.start();
     setStatus("recording");
   }, [status, recorder, playWakeChirp]);
 
