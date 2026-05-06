@@ -90,6 +90,7 @@ export default function NeuralOrb({
         sizeAttenuation: true,
       });
       const nodePoints = new THREE.Points(nodeGeo, nodeMat);
+      nodePoints.frustumCulled = false;
 
       // ── Connection lines (pre-build; rebuilt when nodes move) ─────────
       // We keep a static line geometry that we update in the animate loop.
@@ -106,6 +107,7 @@ export default function NeuralOrb({
         opacity: 0.5,
       });
       const lines = new THREE.LineSegments(lineGeo, linesMat);
+      lines.frustumCulled = false;
 
       // ── 80 free-floating outer particles ─────────────────────────────
       const FLOAT_COUNT   = 80;
@@ -141,6 +143,7 @@ export default function NeuralOrb({
         sizeAttenuation: true,
       });
       const floatPoints = new THREE.Points(floatGeo, floatMat);
+      floatPoints.frustumCulled = false;
 
       // ── Group (everything rotates together) ───────────────────────────
       const group = new THREE.Group();
