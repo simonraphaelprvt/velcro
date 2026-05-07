@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
+import { AnimatePresence } from "framer-motion";
 import { useVelcro, type VelcroCommand } from "@/hooks/useVelcro";
 import { useWakeWord } from "@/hooks/useWakeWord";
 import NeuralOrb from "@/components/NeuralOrb";
 import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow";
+import { parsePanel, FLOATING_PANEL_TYPES } from "@/components/Panels";
+import OrbitingTiles, { type TilesData } from "@/components/OrbitingTiles";
 import { HelpButton } from "@/components/HelpButton";
 import { FEATURES } from "@/lib/config";
 
@@ -66,10 +69,25 @@ export default function Home() {
   useEffect(() => { latestAssistantRef.current = latestAssistant; }, [latestAssistant]);
   const latestUser      = [...messages].reverse().find((m) => m.role === "user");
 
-  // Show window while speaking AND while idle — so orb is beside it as VELCRO explains
+  // Parse the latest assistant's panel envelope (if any) ONCE per render
+  const panelEnvelope = useMemo(
+    () => (latestAssistant?.content ? parsePanel(latestAssistant.content) : null),
+    [latestAssistant?.content],
+  );
+  const isFloatingPanel = panelEnvelope ? FLOATING_PANEL_TYPES.has(panelEnvelope.type) : false;
+
+  // Tiles render as floating cards orbiting the orb — NOT inside ContentWindow.
+  const showOrbitingTiles =
+    !!latestAssistant?.content &&
+    panelEnvelope?.type === "tiles" &&
+    latestAssistant.id !== dismissedId &&
+    (status === "idle" || status === "speaking");
+
+  // ContentWindow shows for all structured content EXCEPT floating panels (tiles).
   const showContentWindow =
     !!latestAssistant?.content &&
     hasStructuredContent(latestAssistant.content) &&
+    !isFloatingPanel &&
     latestAssistant.id !== dismissedId &&
     (status === "idle" || status === "speaking");
 
@@ -78,29 +96,38 @@ export default function Home() {
   const wanderRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowSideRef = useRef<"left" | "right">("right");
   const showWinRef    = useRef(false);
+  const showTilesRef  = useRef(false);
 
-  useEffect(() => { showWinRef.current = showContentWindow; }, [showContentWindow]);
+  useEffect(() => { showWinRef.current   = showContentWindow; }, [showContentWindow]);
+  useEffect(() => { showTilesRef.current = showOrbitingTiles; }, [showOrbitingTiles]);
 
   const scheduleWander = useCallback(() => {
     if (wanderRef.current) clearTimeout(wanderRef.current);
     const delay = 2200 + Math.random() * 2400;
     wanderRef.current = setTimeout(() => {
+      // Pin orb at center while tiles are visible — they orbit around it
+      if (showTilesRef.current) {
+        scheduleWander();
+        return;
+      }
       setOrbT(showWinRef.current ? randomBesideWindow(windowSideRef.current) : randomIdle());
       scheduleWander();
     }, delay);
   }, []);
 
   useEffect(() => {
-    if (showContentWindow) {
+    if (showOrbitingTiles) {
+      // Center & lock orb so tiles orbit cleanly around it
+      setOrbT({ x: 0, y: 0, scale: 0.85 });
+    } else if (showContentWindow) {
       windowSideRef.current = Math.random() > 0.5 ? "right" : "left";
-      // Slight delay before orb moves — let window animate in first
       setTimeout(() => setOrbT(randomBesideWindow(windowSideRef.current)), 350);
     } else {
       setOrbT(randomIdle());
     }
     scheduleWander();
     return () => { if (wanderRef.current) clearTimeout(wanderRef.current); };
-  }, [showContentWindow, scheduleWander]);
+  }, [showContentWindow, showOrbitingTiles, scheduleWander]);
 
   // ── Toggle ────────────────────────────────────────────────────────────
   const toggleListening = useCallback(() => {
@@ -211,6 +238,13 @@ export default function Home() {
           onDismiss={() => setDismissedId(latestAssistant.id ?? null)}
         />
       )}
+
+      {/* Orbiting tiles — float around the orb, not inside ContentWindow */}
+      <AnimatePresence>
+        {showOrbitingTiles && panelEnvelope && (
+          <OrbitingTiles data={panelEnvelope.data as TilesData} />
+        )}
+      </AnimatePresence>
 
       {/* Orb — z-30 ensures it always floats above the content panel */}
       <div

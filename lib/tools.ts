@@ -323,6 +323,122 @@ const MIRROR_TOOL: Anthropic.Tool = {
   },
 };
 
+// ─── Phase 6 — Generative Visuals (Claude-generated content) ──────────────
+
+const TILES_TOOL: Anthropic.Tool = {
+  name: "tiles",
+  description:
+    "Floating Tiles um den Orb — visualisiert genannte Entitaeten (Personen, Firmen, " +
+    "Tools, Projekte). Nutze IMMER wenn Du in einer Antwort 1-6 spezifische, benannte " +
+    "Entitaeten erwaehnst. Beispiele: 'Erzaehl mir was ueber meine Top-Kunden' → Tiles " +
+    "fuer jeden Kunden. 'Welche Tools nutze ich?' → Tiles fuer jedes Tool. " +
+    "DU als Claude waehlst passende Emojis und einen kurzen 1-Zeilen-Beschreiber.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      entities: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            emoji:      { type: "string", description: "1 passendes Emoji fuer die Entitaet" },
+            name:       { type: "string", description: "Name (max ~20 Zeichen)" },
+            descriptor: { type: "string", description: "1-Zeilen-Beschreibung (max ~30 Zeichen)" },
+          },
+          required: ["emoji", "name", "descriptor"],
+        },
+        description: "1-6 Entitaeten",
+      },
+    },
+    required: ["entities"],
+  },
+};
+
+const MINDMAP_TOOL: Anthropic.Tool = {
+  name: "mindmap",
+  description:
+    "Radiales Mindmap fuer Konzepte, Strategien, mehrteilige Ideen. Nutze bei 'Wie funktioniert X', " +
+    "'Erklaer mir das Konzept', 'Was ist die Strategie', 'Welche Bestandteile hat Y'. " +
+    "Zentraler Knoten = Hauptthema, Branches = Unterthemen (max 5), Leaves = Details (max 3 pro Branch).",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      central:  { type: "string", description: "Zentrales Thema (1-3 Worte)" },
+      branches: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label:  { type: "string", description: "Branch-Name (1-3 Worte)" },
+            leaves: { type: "array", items: { type: "string" }, description: "0-3 kurze Details" },
+          },
+          required: ["label"],
+        },
+        description: "3-5 Branches",
+      },
+    },
+    required: ["central", "branches"],
+  },
+};
+
+const TIMELINE_TOOL: Anthropic.Tool = {
+  name: "timeline",
+  description:
+    "Horizontale Timeline fuer Prozesse, Phasen, sequentielle Schritte, Roadmaps. Nutze bei " +
+    "'Wie ist der Ablauf', 'Welche Phasen', 'Was sind die Schritte', 'Roadmap', 'Plan'. " +
+    "Jeder Schritt: Label + Beschreibung. Optional Status: done/current/future fuer Highlight.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      title: { type: "string", description: "Titel des Prozesses (kurz)" },
+      steps: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label:      { type: "string", description: "Phasen-Name (1-3 Worte)" },
+            descriptor: { type: "string", description: "Kurze Beschreibung (max ~50 Zeichen)" },
+            status:     { type: "string", enum: ["done", "current", "future"], description: "Optional: Stand des Schritts" },
+          },
+          required: ["label"],
+        },
+        description: "3-6 Schritte",
+      },
+    },
+    required: ["title", "steps"],
+  },
+};
+
+const METRIC_CARDS_TOOL: Anthropic.Tool = {
+  name: "metric_cards",
+  description:
+    "Animierte Metric-Cards fuer Zahlen, Preise, Stats, KPIs. Nutze IMMER wenn Du in einer " +
+    "Antwort 2-4 numerische Werte nennst — Umsatz, Anzahl, Prozent, Preise etc. " +
+    "Sentiment: positive (gruen), neutral (amber), negative (rot). Optional: change (z.B. '+12%').",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      title: { type: "string", description: "Optionaler Titel" },
+      metrics: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label:     { type: "string", description: "Was ist es? (1-3 Worte)" },
+            value:     { type: "string", description: "Der Wert als String, z.B. '127', '4.5k', '23%', '€1.2M'" },
+            unit:      { type: "string", description: "Optionale Einheit, z.B. '€', '%', 'h'" },
+            sentiment: { type: "string", enum: ["positive", "neutral", "negative"], description: "Optional: Faerbung" },
+            change:    { type: "string", description: "Optional: Veraenderung, z.B. '+12%' oder '-3'" },
+          },
+          required: ["label", "value"],
+        },
+        description: "2-4 Metriken",
+      },
+    },
+    required: ["metrics"],
+  },
+};
+
 const SPATIAL_MAP_TOOL: Anthropic.Tool = {
   name: "spatial_map",
   description:
@@ -365,6 +481,11 @@ export const VELCRO_TOOLS: Anthropic.Tool[] = [
   ...(FEATURES.moodBoard          ? [MOOD_BOARD_TOOL]       : []),
   ...(FEATURES.mirror             ? [MIRROR_TOOL]           : []),
   ...(FEATURES.spatialMap         ? [SPATIAL_MAP_TOOL]      : []),
+  // Phase 6 — Generative Visuals
+  ...(FEATURES.tiles              ? [TILES_TOOL]            : []),
+  ...(FEATURES.mindmap            ? [MINDMAP_TOOL]          : []),
+  ...(FEATURES.timeline           ? [TIMELINE_TOOL]         : []),
+  ...(FEATURES.metricCards        ? [METRIC_CARDS_TOOL]     : []),
   {
     name: "search_vault",
     description:
@@ -521,6 +642,42 @@ export async function executeTool(
 
       case "spatial_map": {
         return await buildSpatialMap((input.days as number) ?? 14);
+      }
+
+      // ── Phase 6 — Generative Visuals ─────────────────────────────────
+      case "tiles": {
+        const data = { entities: input.entities };
+        const entities = (input.entities as { name: string }[]) ?? [];
+        const names = entities.map((e) => e.name).join(", ");
+        const summary = entities.length === 1
+          ? `Hier: ${names}.`
+          : `Hier sind die ${entities.length}: ${names}.`;
+        return `${summary}\n\nVELCRO_PANEL:tiles\n${JSON.stringify(data, null, 2)}`;
+      }
+
+      case "mindmap": {
+        const data = { central: input.central, branches: input.branches };
+        const branches = (input.branches as { label: string }[]) ?? [];
+        const labels = branches.map((b) => b.label).join(", ");
+        const summary = `${input.central}: ${labels}.`;
+        return `${summary}\n\nVELCRO_PANEL:mindmap\n${JSON.stringify(data, null, 2)}`;
+      }
+
+      case "timeline": {
+        const data = { title: input.title, steps: input.steps };
+        const steps = (input.steps as { label: string }[]) ?? [];
+        const labels = steps.map((s) => s.label).join(" → ");
+        const summary = `${input.title}: ${labels}.`;
+        return `${summary}\n\nVELCRO_PANEL:timeline\n${JSON.stringify(data, null, 2)}`;
+      }
+
+      case "metric_cards": {
+        const data = { title: input.title, metrics: input.metrics };
+        const metrics = (input.metrics as { label: string; value: string }[]) ?? [];
+        const parts = metrics.map((m) => `${m.label}: ${m.value}`).join(", ");
+        const intro = input.title ? `${input.title}. ` : "";
+        const summary = `${intro}${parts}.`;
+        return `${summary}\n\nVELCRO_PANEL:metric-cards\n${JSON.stringify(data, null, 2)}`;
       }
 
       case "spotify_control": {

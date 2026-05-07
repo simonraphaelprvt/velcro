@@ -36,6 +36,12 @@ export const FEATURES = {
   relationshipWeb: flag(process.env.NEXT_PUBLIC_FEATURE_RELATIONSHIP_WEB, true),
   moodBoard: flag(process.env.NEXT_PUBLIC_FEATURE_MOOD_BOARD, true),
   mirror: flag(process.env.NEXT_PUBLIC_FEATURE_MIRROR, true),
+
+  // Phase 6 — Generative Visual Panels (no backend, pure Claude generation)
+  tiles:        flag(process.env.NEXT_PUBLIC_FEATURE_TILES,        true),
+  mindmap:      flag(process.env.NEXT_PUBLIC_FEATURE_MINDMAP,      true),
+  timeline:     flag(process.env.NEXT_PUBLIC_FEATURE_TIMELINE,     true),
+  metricCards:  flag(process.env.NEXT_PUBLIC_FEATURE_METRIC_CARDS, true),
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURES;

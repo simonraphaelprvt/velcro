@@ -16,6 +16,9 @@ import RelationshipWeb,  { type RWData } from "@/components/panels/RelationshipW
 import MoodBoard,        { type MBData } from "@/components/panels/MoodBoard";
 import Mirror,           { type MIData } from "@/components/panels/Mirror";
 import SpatialMap,       { type SMData } from "@/components/panels/SpatialMap";
+import Mindmap,          { type MMData } from "@/components/panels/Mindmap";
+import Timeline,         { type TLData } from "@/components/panels/Timeline";
+import MetricCards,      { type MCData } from "@/components/panels/MetricCards";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -26,7 +29,14 @@ export type PanelType =
   | "relationship-web"
   | "mood-board"
   | "mirror"
-  | "spatial-map";
+  | "spatial-map"
+  | "tiles"          // Special: rendered as orbiting cards around the orb, NOT in ContentWindow
+  | "mindmap"
+  | "timeline"
+  | "metric-cards";
+
+/** Panel types that should NOT render inside the ContentWindow. */
+export const FLOATING_PANEL_TYPES: ReadonlySet<PanelType> = new Set<PanelType>(["tiles"]);
 
 export interface PanelEnvelope {
   type: PanelType;
@@ -85,6 +95,12 @@ export function PanelRenderer({ envelope }: { envelope: PanelEnvelope }) {
     case "mood-board":          return <MoodBoard          data={envelope.data as MBData} />;
     case "mirror":              return <Mirror             data={envelope.data as MIData} />;
     case "spatial-map":         return <SpatialMap         data={envelope.data as SMData} />;
+    case "mindmap":             return <Mindmap            data={envelope.data as MMData} />;
+    case "timeline":            return <Timeline           data={envelope.data as TLData} />;
+    case "metric-cards":        return <MetricCards        data={envelope.data as MCData} />;
+    case "tiles":
+      // Rendered separately as floating tiles around the orb (see OrbitingTiles in page.tsx)
+      return null;
     default: return (
       <div className="text-xs" style={{ color: "#6b6b8a" }}>
         Unbekannter Panel-Typ: {envelope.type}

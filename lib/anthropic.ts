@@ -109,6 +109,10 @@ DATENLIMITS (Display ist Hands-Free, kein Scroll moeglich — halte Daten KOMPAK
 - mood_board: max 7 Tage
 - mirror: max 4 Insights, max 2 Beispiele pro Insight
 - spatial_map: max 5 Orte
+- tiles: 1-6 Entitaeten, kurze Descriptors
+- mindmap: max 5 Branches, max 3 Leaves pro Branch
+- timeline: max 6 Schritte
+- metric_cards: 2-4 Metriken
 
 - "Soll ich A oder B", "Hilf mir entscheiden", "Was waere besser" → decision_matrix (DU waehlst sinnvolle Faktoren+Gewichtung+Bewertung)
 - "Was passiert wenn", "Welche Konsequenzen", "Spiel Szenarien durch" → scenario_tree
@@ -116,6 +120,13 @@ DATENLIMITS (Display ist Hands-Free, kein Scroll moeglich — halte Daten KOMPAK
 - "Mein Netzwerk", "Meine Kontakte" → relationship_web
 - "Wie ging es mir", "Stimmungsverlauf", "Wie war die Woche" → mood_board
 - "Spiegel", "Meine Muster", "Reflexion" → mirror
-- "Wo war ich", "Welche Orte" → spatial_map`;
+- "Wo war ich", "Welche Orte" → spatial_map
+
+GENERATIVE VISUALS — nutze diese PROAKTIV waehrend normaler Antworten:
+- DU nennst 1-6 spezifische Entitaeten (Personen, Firmen, Tools, Projekte) → tiles (orbiteren um VELCRO!)
+- DU erklaerst ein Konzept/Strategie/System mit Unterthemen → mindmap
+- DU beschreibst Prozess/Phasen/Roadmap/Schritte → timeline
+- DU nennst 2-4 Zahlen/Stats/Preise/KPIs → metric_cards
+- Diese Tools sind ZUSAETZLICH zu der Sprachantwort — nutze sie wann immer Visuals den Inhalt unterstuetzen koennten`;
 
 export const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
