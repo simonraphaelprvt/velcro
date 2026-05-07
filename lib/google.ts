@@ -38,18 +38,23 @@ interface StoredTokens {
 
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
   const db = getServiceSupabase();
-  await db.from("google_tokens").upsert({
+  const { error } = await db.from("google_tokens").upsert({
     id: 1,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expiry_date: tokens.expiry_date,
     updated_at: new Date().toISOString(),
   });
+  if (error) throw new Error(`Supabase saveTokens: ${error.message} (code: ${error.code})`);
 }
 
 export async function loadTokens(): Promise<StoredTokens | null> {
   const db = getServiceSupabase();
-  const { data } = await db.from("google_tokens").select("*").eq("id", 1).single();
+  const { data, error } = await db.from("google_tokens").select("*").eq("id", 1).single();
+  if (error && error.code !== "PGRST116") {
+    // PGRST116 = no rows found — expected when not yet connected
+    throw new Error(`Supabase loadTokens: ${error.message} (code: ${error.code})`);
+  }
   if (!data) return null;
   return {
     access_token: data.access_token,
