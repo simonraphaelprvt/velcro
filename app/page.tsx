@@ -9,6 +9,7 @@ import { ContentWindow, hasStructuredContent } from "@/components/ContentWindow"
 import { parsePanel, FLOATING_PANEL_TYPES } from "@/components/Panels";
 import OrbitingTiles, { type TilesData } from "@/components/OrbitingTiles";
 import { HelpButton } from "@/components/HelpButton";
+import { GoogleButton } from "@/components/GoogleButton";
 import { FEATURES } from "@/lib/config";
 
 const statusLabel: Record<string, string> = {
@@ -209,6 +210,9 @@ export default function Home() {
 
       {/* Help button — bottom left, capabilities legend */}
       <HelpButton />
+
+      {/* Google connect button — bottom left, next to help */}
+      <GoogleButton />
 
       {/* Status dot */}
       <span className={[

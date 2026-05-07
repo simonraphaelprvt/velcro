@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { parsePanel, PanelRenderer, stripPanelFromText } from "@/components/Panels";
+import { parsePanel, PanelRenderer, stripPanelFromText, FLOATING_PANEL_TYPES } from "@/components/Panels";
 
 interface ContentWindowProps {
   content:   string;
@@ -12,6 +12,10 @@ interface ContentWindowProps {
 
 export function ContentWindow({ content, onDismiss }: ContentWindowProps) {
   const panel          = parsePanel(content);
+
+  // Never render ContentWindow for floating panel types (tiles etc.) — they render outside it
+  if (panel && FLOATING_PANEL_TYPES.has(panel.type)) return null;
+
   const displayContent = panel ? "" : extractDisplayContent(content);
 
   useEffect(() => {
@@ -142,6 +146,8 @@ export function extractDisplayContent(text: string): string {
 }
 
 export function hasStructuredContent(text: string): boolean {
+  // Floating panels (tiles) are rendered outside ContentWindow — never count as structured content here
+  if (/VELCRO_PANEL:\s*tiles\b/i.test(text)) return false;
   if (/^VELCRO_PANEL:/m.test(text)) return true;
   const hasTable        = /\|.+\|/.test(text) && /\|[-: ]+\|/.test(text);
   const hasCodeBlock    = text.includes("```");
